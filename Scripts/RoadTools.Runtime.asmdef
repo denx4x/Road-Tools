@@ -1,0 +1,9 @@
+{
+  "name": "RoadTools.Runtime",
+  "rootNamespace": "Dyma.SplineLevelToolkit",
+  "references": [
+    "Unity.Splines",
+    "Unity.Mathematics"
+  ],
+  "autoReferenced": true
+}

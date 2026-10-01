@@ -1,0 +1,33 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6765d6586c027564cb185fe2de61f4c1, type: 3}
+  m_Name: Two Lane Asphalt
+  m_EditorClassIdentifier: Assembly-CSharp::Dyma.SplineLevelToolkit.RoadProfile
+  width: 7
+  thickness: 0.15
+  sampleSpacing: 0.75
+  chunkLength: 20
+  material: {fileID: 2100000, guid: e263bfa6ea39bce4ead6118acb0f6996, type: 2}
+  uvMetersPerTile: 8
+  colliderMode: 1
+  conformRoadToTerrain: 0
+  deformTerrain: 0
+  terrainBlendDistance: 2
+  terrainSurfaceOffset: 0.05
+  clearTerrainDetails: 0
+  detailClearDistance: 0.5
+  clearTerrainTrees: 0
+  treeClearDistance: 1
+  paintTerrainLayer: 0
+  terrainLayerIndex: 0
+  terrainPaintBlendDistance: 1
+  terrainPaintBands: []

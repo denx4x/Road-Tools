@@ -1,0 +1,12 @@
+{
+  "name": "RoadTools.Editor",
+  "rootNamespace": "Dyma.SplineLevelToolkit.Editor",
+  "references": [
+    "RoadTools.Runtime",
+    "Unity.Splines",
+    "Unity.Splines.Editor",
+    "Unity.Mathematics"
+  ],
+  "includePlatforms": ["Editor"],
+  "autoReferenced": true
+}
