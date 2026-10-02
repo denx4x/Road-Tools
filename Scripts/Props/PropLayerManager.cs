@@ -52,8 +52,18 @@ namespace Dyma.SplineLevelToolkit
                 if (spline.Splines[splineIndex] == null || spline.Splines[splineIndex].Count < 2)
                     continue;
 
+                float sampleSpacing = Mathf.Max(0.5f, profile.SampleSpacing);
+                foreach (SplinePropLayer layer in layers)
+                {
+                    if (layer != null && layer.ContinuousFence && layer.Prefab != null &&
+                        layer.Prefab.GetComponent<RoadFenceModel>() != null)
+                    {
+                        sampleSpacing = Mathf.Min(sampleSpacing, 0.4f);
+                        break;
+                    }
+                }
                 List<SplineSamplingUtility.Sample> samples =
-                    SplineSamplingUtility.BuildArcLengthSamples(spline, splineIndex, Mathf.Max(0.5f, profile.SampleSpacing));
+                    SplineSamplingUtility.BuildArcLengthSamples(spline, splineIndex, sampleSpacing);
                 if (samples.Count < 2)
                     continue;
 
@@ -68,6 +78,9 @@ namespace Dyma.SplineLevelToolkit
             Transform existing = transform.Find(GeneratedRootName);
             if (existing == null)
                 return;
+
+            foreach (RoadFenceGeneratedMesh owned in existing.GetComponentsInChildren<RoadFenceGeneratedMesh>(true))
+                owned.Release();
 
             foreach (MeshFilter filter in existing.GetComponentsInChildren<MeshFilter>(true))
             {
@@ -104,6 +117,15 @@ namespace Dyma.SplineLevelToolkit
             var random = new System.Random(layer.Seed);
             float start = Mathf.Max(layer.StartOffset, layer.IntersectionExclusionDistance);
             float end = Mathf.Min(length - layer.EndOffset, length - layer.IntersectionExclusionDistance);
+
+            RoadFenceModel model = layer.ContinuousFence ? layer.Prefab.GetComponent<RoadFenceModel>() : null;
+            if (model != null)
+            {
+                if (end > start)
+                    LastGeneratedInstanceCount += RoadFenceModelGenerator.Build(
+                        layerRoot.transform, samples, profile, layer, model, start, end);
+                return;
+            }
 
             if (layer.ContinuousFence && end > start)
                 RoadFenceMeshGenerator.Build(layerRoot.transform, samples, profile, layer, start, end);

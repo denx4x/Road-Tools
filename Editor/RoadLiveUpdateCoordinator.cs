@@ -30,7 +30,7 @@ namespace Dyma.SplineLevelToolkit.Editor
         {
             SplineRoad.AutoRebuildRequested += Queue;
             EditorApplication.update += Update;
-            Undo.undoRedoPerformed += OnUndoRedo;
+            Undo.undoRedoEvent += OnUndoRedo;
             Undo.postprocessModifications += OnModifications;
             EditorSceneManager.sceneOpened += OnSceneOpened;
             EditorApplication.playModeStateChanged += OnPlayModeChanged;
@@ -67,8 +67,9 @@ namespace Dyma.SplineLevelToolkit.Editor
             Pending.Clear();
             if (state == PlayModeStateChange.EnteredEditMode) Discover();
         }
-        private static void OnUndoRedo()
+        private static void OnUndoRedo(in UndoRedoInfo info)
         {
+            if (info.undoName == RoadMaterialUtility.MaterialUndoName) return;
             Discover();
             EditorApplication.delayCall += FlushPending;
         }
@@ -77,6 +78,7 @@ namespace Dyma.SplineLevelToolkit.Editor
             if (processing) return changes;
             foreach (var modification in changes)
             {
+                if (RoadMaterialUtility.IsMaterialModification(modification.currentValue)) continue;
                 Object target = modification.currentValue.target;
                 if (target is RoadProfile profile)
                     QueueProfile(profile);
@@ -130,7 +132,7 @@ namespace Dyma.SplineLevelToolkit.Editor
                 foreach (SplineRoad road in Work)
                 {
                     if (road == null || !road.LiveUpdatesEnabled || !road.isActiveAndEnabled || road.IsBaked || road.Profile == null) continue;
-                    if (road.Profile.UsesTerrain || road.AdjustTerrainToRoad) EnsureTerrainRegistration(road);
+                    if (road.Profile.UsesTerrain || road.AdjustTerrainToRoad) EnsureTerrainRegistration(road, null, false);
                 }
                 RoadTerrainManager[] managers = Object.FindObjectsByType<RoadTerrainManager>(FindObjectsSortMode.None);
                 foreach (SplineRoad road in Work)
@@ -181,7 +183,7 @@ namespace Dyma.SplineLevelToolkit.Editor
             }
         }
 
-        internal static bool EnsureTerrainRegistration(SplineRoad road, Terrain explicitTerrain = null)
+        internal static bool EnsureTerrainRegistration(SplineRoad road, Terrain explicitTerrain = null, bool recordUndo = true)
         {
             if (road == null || road.Profile == null || road.IsBaked) return false;
             if (States.TryGetValue(road, out var roadState)) roadState.TerrainError = null;
@@ -191,8 +193,10 @@ namespace Dyma.SplineLevelToolkit.Editor
                 if (terrain == null || terrain.terrainData == null ||
                     (explicitTerrain != null ? terrain != explicitTerrain : terrain.gameObject.scene != road.gameObject.scene || !Overlaps(road, terrain))) continue;
                 RoadTerrainManager manager = terrain.GetComponent<RoadTerrainManager>();
-                if (manager == null) manager = Undo.AddComponent<RoadTerrainManager>(terrain.gameObject);
-                if (manager.BaseSnapshot == null) RoadTerrainManagerEditor.Capture(manager, terrain);
+                if (manager == null) manager = recordUndo
+                    ? Undo.AddComponent<RoadTerrainManager>(terrain.gameObject)
+                    : terrain.gameObject.AddComponent<RoadTerrainManager>();
+                if (manager.BaseSnapshot == null) RoadTerrainManagerEditor.Capture(manager, terrain, recordUndo);
                 if (manager.BaseSnapshot == null || !manager.BaseSnapshot.Matches(terrain.terrainData))
                 {
                     if (States.TryGetValue(road, out var state)) state.TerrainError = state.Status = "Terrain snapshot does not match. Assign its original base snapshot.";
@@ -202,12 +206,15 @@ namespace Dyma.SplineLevelToolkit.Editor
                 foreach (SplineRoad listed in manager.Roads) already |= listed == road;
                 if (!already)
                 {
-                    Undo.RecordObject(manager, "Connect Road to Terrain"); manager.AddRoad(road);
+                    // A derived rebuild (including Undo/Redo) must not add an authoring Undo item or clear Redo.
+                    if (recordUndo) Undo.RecordObject(manager, "Connect Road to Terrain");
+                    manager.AddRoad(road);
                     EditorUtility.SetDirty(manager); EditorSceneManager.MarkSceneDirty(manager.gameObject.scene);
                 }
                 if (!road.AdjustTerrainToRoad && !road.Profile.DeformTerrain)
                 {
-                    Undo.RecordObject(road, "Enable Live Road Terrain"); road.SetTerrainAdjustment(true); EditorUtility.SetDirty(road);
+                    if (recordUndo) Undo.RecordObject(road, "Enable Live Road Terrain");
+                    road.SetTerrainAdjustment(true); EditorUtility.SetDirty(road);
                 }
                 registered = true;
             }

@@ -10,7 +10,7 @@ namespace Dyma.SplineLevelToolkit.Editor
     public static class RoadToolsTestSceneBuilder
     {
         private const string GeneratedFolder = RoadToolsPackagePaths.GeneratedRoot;
-        private const string ScenePath = GeneratedFolder + "/Scenes/Road Tools Test.unity";
+        private const string ScenePath = RoadToolsWorkspace.DevelopmentRoot + "/Scenes/Road Tools Test.unity";
         private const string GeneratedProfilePath = GeneratedFolder + "/Profiles/Two Lane Asphalt.asset";
         private const string GeneratedMaterialPath = GeneratedFolder + "/Materials/Road Asphalt.mat";
         private const string GeneratedLampPrefabPath = GeneratedFolder + "/Prefabs/Street Lamp.prefab";
@@ -244,7 +244,7 @@ namespace Dyma.SplineLevelToolkit.Editor
 
         private static void EnsureGeneratedFolders()
         {
-            RoadSetupUtility.EnsureAssetFolder(GeneratedFolder + "/Scenes");
+            RoadSetupUtility.EnsureAssetFolder(RoadToolsWorkspace.DevelopmentRoot + "/Scenes");
             RoadSetupUtility.EnsureAssetFolder(GeneratedFolder + "/Profiles");
             RoadSetupUtility.EnsureAssetFolder(GeneratedFolder + "/Materials");
             RoadSetupUtility.EnsureAssetFolder(GeneratedFolder + "/Prefabs");

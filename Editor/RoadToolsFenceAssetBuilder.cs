@@ -8,11 +8,22 @@ namespace Dyma.SplineLevelToolkit.Editor
         private const string GeneratedFolder = RoadToolsPackagePaths.GeneratedRoot;
         private const string MaterialPath = GeneratedFolder + "/Materials/Galvanized Fence.mat";
         private const string PrefabPath = GeneratedFolder + "/Prefabs/Roadside Fence.prefab";
+        private const string ModelPrefabPath = GeneratedFolder + "/Prefabs/Road Fence.prefab";
 
-        internal static GameObject GetOrCreatePrefab()
+        internal static GameObject FindPreferredPrefab() =>
+            AssetDatabase.LoadAssetAtPath<GameObject>(ModelPrefabPath) ??
+            RoadToolsPackagePaths.LoadDefault<GameObject>("Prefabs/Road Fence.prefab") ??
+            RoadToolsPackagePaths.LoadDefault<GameObject>("Prefabs/Roadside Fence.prefab") ??
+            AssetDatabase.LoadAssetAtPath<GameObject>(PrefabPath);
+
+        internal static GameObject GetOrCreatePrefab(GameObject customPrefab = null)
         {
-            GameObject existing = RoadToolsPackagePaths.LoadDefault<GameObject>("Prefabs/Roadside Fence.prefab") ??
-                AssetDatabase.LoadAssetAtPath<GameObject>(PrefabPath);
+            if (customPrefab != null)
+                return customPrefab.GetComponent<RoadFenceModel>() != null ||
+                    (customPrefab.name == "Roadside Fence" && customPrefab == FindPreferredPrefab())
+                    ? customPrefab : CreateModelPrefab(customPrefab);
+
+            GameObject existing = FindPreferredPrefab();
             if (existing != null)
                 return existing;
 
@@ -67,6 +78,60 @@ namespace Dyma.SplineLevelToolkit.Editor
             {
                 Object.DestroyImmediate(root);
             }
+        }
+
+        private static GameObject CreateModelPrefab(GameObject source)
+        {
+            MeshFilter[] meshes = source.GetComponentsInChildren<MeshFilter>(true);
+            if (meshes.Length == 0)
+            {
+                Debug.LogError("Choose a fence model or prefab with MeshFilters.", source);
+                return null;
+            }
+            string sourcePath = AssetDatabase.GetAssetPath(source);
+            var importerPaths = new System.Collections.Generic.HashSet<string>();
+            foreach (MeshFilter filter in meshes)
+            {
+                if (filter.sharedMesh == null || filter.sharedMesh.isReadable) continue;
+                string meshPath = AssetDatabase.GetAssetPath(filter.sharedMesh);
+                if (meshPath.StartsWith("Assets/", System.StringComparison.Ordinal) &&
+                    AssetImporter.GetAtPath(meshPath) is ModelImporter importer)
+                {
+                    importerPaths.Add(meshPath);
+                }
+                else
+                {
+                    Debug.LogError("The fence model needs Read/Write Enabled. Copy read-only package models into Assets before changing their importer.", source);
+                    return null;
+                }
+            }
+            foreach (string path in importerPaths)
+            {
+                var importer = (ModelImporter)AssetImporter.GetAtPath(path);
+                importer.isReadable = true;
+                importer.SaveAndReimport();
+            }
+            if (importerPaths.Count > 0 && !string.IsNullOrEmpty(sourcePath))
+                source = AssetDatabase.LoadAssetAtPath<GameObject>(sourcePath);
+            if (source == null) return null;
+
+            RoadSetupUtility.EnsureAssetFolder(GeneratedFolder + "/Prefabs");
+            var root = new GameObject("Road Fence");
+            try
+            {
+                GameObject instance = Object.Instantiate(source, root.transform);
+                instance.name = source.name;
+                instance.transform.localPosition = Vector3.zero;
+                instance.transform.localRotation = Quaternion.identity;
+                root.AddComponent<RoadFenceModel>();
+                string name = source.name;
+                foreach (char invalid in System.IO.Path.GetInvalidFileNameChars()) name = name.Replace(invalid, '_');
+                string path = AssetDatabase.GenerateUniqueAssetPath(GeneratedFolder + "/Prefabs/" + name + " Fence.prefab");
+                GameObject prefab = PrefabUtility.SaveAsPrefabAsset(root, path);
+                AssetDatabase.SaveAssets();
+                return prefab;
+            }
+            finally { Object.DestroyImmediate(root); }
         }
 
         private static void AddBox(Transform parent, string name, Vector3 position, Vector3 scale, Material material)

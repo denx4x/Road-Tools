@@ -16,7 +16,7 @@ namespace Dyma.SplineLevelToolkit
         public int LastGeneratedMeshCount { get; private set; }
         public int LastGeneratedVertexCount { get; private set; }
 
-        public void Rebuild(SplineContainer spline, RoadProfile profile)
+        public void Rebuild(SplineContainer spline, RoadProfile profile, Material materialOverride = null)
         {
             LastSelfOverlapReductionCount = 0;
             LastGeneratedMeshCount = 0;
@@ -64,6 +64,7 @@ namespace Dyma.SplineLevelToolkit
                         maximumWidths,
                         meshSampleSpacing,
                         profile,
+                        materialOverride != null ? materialOverride : profile.Material,
                         start,
                         end,
                         splineIndex,
@@ -109,6 +110,7 @@ namespace Dyma.SplineLevelToolkit
             IReadOnlyList<float> maximumWidths,
             float meshSampleSpacing,
             RoadProfile profile,
+            Material material,
             float start,
             float end,
             int splineIndex,
@@ -233,7 +235,7 @@ namespace Dyma.SplineLevelToolkit
             chunk.transform.SetParent(parent, false);
             MeshFilter filter = chunk.AddComponent<MeshFilter>();
             filter.sharedMesh = mesh;
-            chunk.AddComponent<MeshRenderer>().sharedMaterial = profile.Material;
+            chunk.AddComponent<MeshRenderer>().sharedMaterial = material;
             LastGeneratedMeshCount++;
             LastGeneratedVertexCount += mesh.vertexCount;
             return filter;

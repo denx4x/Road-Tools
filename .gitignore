@@ -30,7 +30,8 @@ Thumbs.db
 *.unitypackage.meta
 
 # Private authoring documents are kept outside this repository.
-/Documentation~/
+/Documentation~/*
+!/Documentation~/QuickStart.md
 RELEASING.md
 RELEASING.md.meta
 USAGE.md

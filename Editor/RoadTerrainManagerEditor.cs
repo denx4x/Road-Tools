@@ -46,7 +46,7 @@ namespace Dyma.SplineLevelToolkit.Editor
                 EditorGUILayout.HelpBox(status, statusType);
         }
 
-        internal static string Capture(RoadTerrainManager manager, Terrain terrain)
+        internal static string Capture(RoadTerrainManager manager, Terrain terrain, bool recordUndo = true)
         {
             string scenePath = manager.gameObject.scene.path;
             string sceneFolder = string.IsNullOrEmpty(scenePath)
@@ -63,7 +63,7 @@ namespace Dyma.SplineLevelToolkit.Editor
             string path = AssetDatabase.GenerateUniqueAssetPath($"{folder}/{terrain.name} Base.asset");
             AssetDatabase.CreateAsset(snapshot, path);
             AssetDatabase.SaveAssets();
-            Undo.RecordObject(manager, "Capture Terrain Base Snapshot");
+            if (recordUndo) Undo.RecordObject(manager, "Capture Terrain Base Snapshot");
             manager.SetBaseSnapshot(snapshot);
             EditorUtility.SetDirty(manager);
             EditorSceneManager.MarkSceneDirty(manager.gameObject.scene);

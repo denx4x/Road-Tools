@@ -1,6 +1,6 @@
 {
   "name": "com.denx4x.road-tools",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "displayName": "Road Tools",
   "description": "Spline road authoring with live terrain adjustment, layered props, guardrails, direction presets and mesh baking.",
   "unity": "6000.3",
