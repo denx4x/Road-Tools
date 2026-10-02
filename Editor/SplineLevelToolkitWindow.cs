@@ -12,6 +12,7 @@ namespace Dyma.SplineLevelToolkit.Editor
     public sealed class SplineLevelToolkitWindow : EditorWindow
     {
         private RoadProfile profile;
+        [SerializeField] private Material newRoadMaterial;
         private RoadSocket socket;
         private Terrain targetTerrain;
         private Vector2 scrollPosition;
@@ -23,6 +24,7 @@ namespace Dyma.SplineLevelToolkit.Editor
         [SerializeField] private float turnRadius = 12f;
         [SerializeField] private bool showTurnPreview;
         private readonly RoadTurnPreview turnPreview = new RoadTurnPreview();
+        [SerializeField] private RoadKnotConnectionPanel knotConnections = new RoadKnotConnectionPanel();
         private static readonly string[] TabNames = { "Road", "Props", "Terrain", "Connections", "Test Scene" };
 
         [MenuItem("Tools/Road Tools/Open Window")]
@@ -30,9 +32,12 @@ namespace Dyma.SplineLevelToolkit.Editor
 
         private void OnEnable()
         {
+            RoadToolsWorkspace.EnsureProjectFolders();
+            if (knotConnections == null) knotConnections = new RoadKnotConnectionPanel();
             titleContent = new GUIContent("Road Tools");
             LoadDefaultProfileIfMissing();
             SplineSelection.changed += Repaint;
+            SplineSelection.changed += ObserveConnectionSelection;
             SceneView.duringSceneGui += DrawTurnPreview;
             TerrainCallbacks.heightmapChanged += OnTerrainHeightChanged;
         }
@@ -40,6 +45,7 @@ namespace Dyma.SplineLevelToolkit.Editor
         private void OnDisable()
         {
             SplineSelection.changed -= Repaint;
+            SplineSelection.changed -= ObserveConnectionSelection;
             SceneView.duringSceneGui -= DrawTurnPreview;
             TerrainCallbacks.heightmapChanged -= OnTerrainHeightChanged;
             turnPreview.Clear();
@@ -54,10 +60,16 @@ namespace Dyma.SplineLevelToolkit.Editor
 
         private void DrawTurnPreview(SceneView view)
         {
+            if (activeTab == 3) knotConnections.DrawPreview();
             if (!showTurnPreview || activeTab != 0) { turnPreview.Clear(); return; }
             var road = Selection.activeGameObject != null ? Selection.activeGameObject.GetComponent<SplineRoad>() : null;
             turnPreview.Update(road, directionSegmentLength, customDirectionAngle, turnRadius);
             turnPreview.Draw();
+        }
+
+        private void ObserveConnectionSelection()
+        {
+            if (activeTab == 3) knotConnections.ObserveSelection();
         }
 
         private void OnGUI()
@@ -67,7 +79,9 @@ namespace Dyma.SplineLevelToolkit.Editor
             SplineRoad selectedRoad = selected != null ? selected.GetComponent<SplineRoad>() : null;
 
             DrawHeader(selectedRoad);
+            int previousTab = activeTab;
             activeTab = GUILayout.Toolbar(activeTab, TabNames, GUILayout.Height(28));
+            if (activeTab == 3 && previousTab != activeTab) knotConnections.ObserveSelection();
             if (!string.IsNullOrEmpty(actionStatus))
             {
                 EditorGUILayout.Space(5);
@@ -156,10 +170,21 @@ namespace Dyma.SplineLevelToolkit.Editor
                 DrawDirectionPresets(selectedRoad);
             EndCard();
 
+            if (selectedRoad != null)
+            {
+                BeginCard("ROAD MATERIAL");
+                RoadToolsMaterialPanel.Draw(selectedRoad);
+                EndCard();
+            }
+
             BeginCard("CREATE ROAD");
             profile = (RoadProfile)EditorGUILayout.ObjectField("Road Profile", profile, typeof(RoadProfile), false);
+            RoadToolsMaterialPanel.DrawTemplate(ref newRoadMaterial, profile);
             if (GUILayout.Button("Create Road From Scene View", GUILayout.Height(30)))
-                CreateRoad(profile);
+            {
+                SplineRoad created = CreateRoad(profile);
+                if (created != null && newRoadMaterial != null) RoadMaterialUtility.Set(created, newRoadMaterial);
+            }
             if (profile == null)
                 EditorGUILayout.LabelField("An existing or default Road Profile will be assigned automatically.", RoadToolsWindowStyles.Body);
             if (selected != null)
@@ -349,6 +374,9 @@ namespace Dyma.SplineLevelToolkit.Editor
 
         private void DrawConnectionsTab(SplineRoad selectedRoad)
         {
+            BeginCard("MERGE TWO ROADS");
+            knotConnections.Draw(SetStatus);
+            EndCard();
             BeginCard("INTERSECTIONS");
             if (GUILayout.Button("Create 4-Way Socket Hub", GUILayout.Height(27)))
                 CreateSocketHub();
@@ -370,6 +398,21 @@ namespace Dyma.SplineLevelToolkit.Editor
 
         private void DrawTestSceneTab()
         {
+            BeginCard("PROJECT FOLDERS & SAMPLES");
+            EditorGUILayout.LabelField("Workspace: Assets/Road Tools", RoadToolsWindowStyles.Body);
+            EditorGUILayout.LabelField("Samples, Documentation, Generated and Development are ready for your project.", RoadToolsWindowStyles.Body);
+            EditorGUILayout.BeginHorizontal();
+            if (GUILayout.Button("Open Project Folder")) RoadToolsWorkspace.OpenProjectFolder();
+            if (GUILayout.Button("Open Documentation")) RoadToolsWorkspace.OpenDocumentation();
+            EditorGUILayout.EndHorizontal();
+            if (GUILayout.Button("Import Demo Sample", GUILayout.Height(30)))
+            {
+                RoadToolsSampleImporter.ImportDemo(out string message, out MessageType type);
+                actionStatus = message;
+                actionStatusType = type;
+                Repaint();
+            }
+            EndCard();
             BeginCard("TEST SCENE");
             EditorGUILayout.LabelField("Choose where to set up the road test environment.", RoadToolsWindowStyles.Body);
             EditorGUILayout.Space(6);

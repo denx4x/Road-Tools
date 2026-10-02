@@ -11,6 +11,7 @@ namespace Dyma.SplineLevelToolkit
     public sealed class SplineRoad : MonoBehaviour
     {
         [SerializeField] private RoadProfile profile;
+        [SerializeField, HideInInspector] private Material materialOverride;
         [SerializeField] private bool rebuildAutomatically = true;
         [SerializeField, HideInInspector] private bool baked;
         [SerializeField, HideInInspector] private bool adjustTerrainToRoad;
@@ -20,8 +21,16 @@ namespace Dyma.SplineLevelToolkit
         private RoadColliderGenerator colliderGenerator;
         private PropLayerManager propLayerManager;
         private bool rebuildQueued;
+        private Material validatedMaterialOverride;
+        private RoadProfile validatedProfile;
+        private bool validatedLiveUpdates;
+        private bool validatedBaked;
+        private bool validatedTerrainAdjustment;
+        private bool hasValidatedState;
 
         public RoadProfile Profile => profile;
+        public Material MaterialOverride => materialOverride;
+        public Material EffectiveMaterial => materialOverride != null ? materialOverride : profile != null ? profile.Material : null;
         public bool IsBaked => baked;
         public bool AdjustTerrainToRoad => adjustTerrainToRoad;
         public bool LiveUpdatesEnabled => rebuildAutomatically;
@@ -32,11 +41,17 @@ namespace Dyma.SplineLevelToolkit
 
         private void OnEnable()
         {
+            // Unity reenables recorded components when undoing a material assignment.
+            bool restoringMaterial = AuthoringStateMatchesSnapshot() &&
+                materialOverride != validatedMaterialOverride && transform.Find("Generated Road Mesh") != null;
             CacheComponents();
+            RememberValidatedState();
             Spline.Changed += OnSplineChanged;
             SplineContainer.SplineAdded += OnSplineCollectionChanged;
             SplineContainer.SplineRemoved += OnSplineCollectionChanged;
-            if (!Application.isPlaying && !baked)
+            if (restoringMaterial)
+                ApplyMaterial();
+            else if (!Application.isPlaying && !baked)
                 RequestRebuild();
         }
 
@@ -50,6 +65,16 @@ namespace Dyma.SplineLevelToolkit
         private void OnValidate()
         {
             CacheComponents();
+            // Unity may validate repeatedly during Undo. Revalidate appearance without
+            // rebuilding when the road's geometry/terrain authoring state is unchanged.
+            bool authoringStateUnchanged = AuthoringStateMatchesSnapshot();
+            bool materialChanged = materialOverride != validatedMaterialOverride;
+            RememberValidatedState();
+            if (authoringStateUnchanged)
+            {
+                if (materialChanged) ApplyMaterial();
+                return;
+            }
             if (isActiveAndEnabled && rebuildAutomatically && !baked)
                 RequestRebuild();
         }
@@ -63,6 +88,7 @@ namespace Dyma.SplineLevelToolkit
         public void SetLiveUpdates(bool enabled)
         {
             rebuildAutomatically = enabled;
+            RememberValidatedState();
             if (enabled) RequestRebuild();
             else rebuildQueued = false;
         }
@@ -78,8 +104,38 @@ namespace Dyma.SplineLevelToolkit
         {
             profile = value;
             baked = false;
+            RememberValidatedState();
             Rebuild();
         }
+
+        public void SetMaterialOverride(Material value)
+        {
+            materialOverride = value;
+            RememberValidatedState();
+            ApplyMaterial();
+        }
+
+        private void ApplyMaterial()
+        {
+            Transform root = transform.Find("Generated Road Mesh");
+            if (root == null) return;
+            foreach (MeshRenderer renderer in root.GetComponentsInChildren<MeshRenderer>(true))
+                renderer.sharedMaterial = EffectiveMaterial;
+        }
+
+        private void RememberValidatedState()
+        {
+            validatedMaterialOverride = materialOverride;
+            validatedProfile = profile;
+            validatedLiveUpdates = rebuildAutomatically;
+            validatedBaked = baked;
+            validatedTerrainAdjustment = adjustTerrainToRoad;
+            hasValidatedState = true;
+        }
+
+        private bool AuthoringStateMatchesSnapshot() => hasValidatedState &&
+            profile == validatedProfile && rebuildAutomatically == validatedLiveUpdates &&
+            baked == validatedBaked && adjustTerrainToRoad == validatedTerrainAdjustment;
 
         public RoadBuildReport Rebuild() => Rebuild(true);
 
@@ -94,7 +150,7 @@ namespace Dyma.SplineLevelToolkit
             if (splineContainer == null || splineContainer.Splines.Count == 0)
                 return LastBuildReport = new RoadBuildReport(false, "Add a spline with at least two knots.");
 
-            meshGenerator.Rebuild(splineContainer, profile);
+            meshGenerator.Rebuild(splineContainer, profile, materialOverride);
             if (colliderGenerator == null)
                 colliderGenerator = gameObject.AddComponent<RoadColliderGenerator>();
             colliderGenerator.Rebuild(transform.Find("Generated Road Mesh"), profile);
@@ -120,7 +176,11 @@ namespace Dyma.SplineLevelToolkit
                 colliderGenerator.LastGeneratedColliderCount);
         }
 
-        public void MarkBaked() => baked = true;
+        public void MarkBaked()
+        {
+            baked = true;
+            RememberValidatedState();
+        }
 
         public void RebuildProps()
         {
@@ -135,12 +195,14 @@ namespace Dyma.SplineLevelToolkit
         public void SetTerrainAdjustment(bool enabled)
         {
             adjustTerrainToRoad = enabled;
+            RememberValidatedState();
             RequestRebuild();
         }
 
         public RoadBuildReport ResumeEditing()
         {
             baked = false;
+            RememberValidatedState();
             return Rebuild();
         }
 
