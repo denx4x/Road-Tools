@@ -69,7 +69,7 @@ namespace Dyma.SplineLevelToolkit.Editor
         }
         private static void OnUndoRedo(in UndoRedoInfo info)
         {
-            if (info.undoName == RoadMaterialUtility.MaterialUndoName) return;
+            if (info.undoName == RoadMaterialUtility.MaterialUndoName || info.undoName == RoadMaterialSectionEditing.UndoName) return;
             Discover();
             EditorApplication.delayCall += FlushPending;
         }

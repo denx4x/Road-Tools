@@ -10,6 +10,8 @@ namespace Dyma.SplineLevelToolkit
 
         [SerializeField] private LengthAxis longitudinalAxis = LengthAxis.Z;
         [SerializeField] private bool mirrorRightSide = true;
+        [SerializeField, Tooltip("Reverse the model's lateral facing before left/right mirroring. Enable if support posts face the road instead of the rail.")]
+        private bool flipFacing;
         [SerializeField, Min(0.1f)] private float meshSubdivisionLength = 0.4f;
         [SerializeField, Min(0f), Tooltip("Distance in meters used to smooth the fence height over terrain.")]
         private float heightSmoothingDistance = 4f;
@@ -18,6 +20,7 @@ namespace Dyma.SplineLevelToolkit
 
         public LengthAxis LongitudinalAxis => longitudinalAxis;
         public bool MirrorRightSide => mirrorRightSide;
+        public bool FlipFacing => flipFacing;
         public float MeshSubdivisionLength => Mathf.Max(0.1f, meshSubdivisionLength);
         public float HeightSmoothingDistance => Mathf.Max(0f, heightSmoothingDistance);
         public float GroundedSupportHeight => Mathf.Max(0f, groundedSupportHeight);

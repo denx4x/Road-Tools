@@ -36,22 +36,36 @@ namespace Dyma.SplineLevelToolkit
         };
 
         internal static void Build(Transform parent, IReadOnlyList<SplineSamplingUtility.Sample> samples,
-            RoadProfile profile, SplinePropLayer layer, float start, float end)
+            RoadProfile profile, SplinePropLayer layer, float start, float end, int splineIndex = 0)
         {
             Material material = layer.Prefab.transform.Find("Rail Back")?.GetComponent<MeshRenderer>()?.sharedMaterial;
             if (material == null)
                 return;
 
             if (layer.Side == PropSide.Both || layer.Side == PropSide.Left)
-                BuildSide(parent, samples, profile, layer, start, end, -1f, material);
+                BuildSide(parent, samples, profile, layer, start, end, -1f, material, splineIndex);
             if (layer.Side == PropSide.Both || layer.Side == PropSide.Right)
-                BuildSide(parent, samples, profile, layer, start, end, 1f, material);
+                BuildSide(parent, samples, profile, layer, start, end, 1f, material, splineIndex);
             if (layer.Side == PropSide.Center)
-                BuildSide(parent, samples, profile, layer, start, end, 0f, material);
+                BuildSide(parent, samples, profile, layer, start, end, 0f, material, splineIndex);
         }
 
         private static void BuildSide(Transform parent, IReadOnlyList<SplineSamplingUtility.Sample> samples,
-            RoadProfile profile, SplinePropLayer layer, float start, float end, float side, Material material)
+            RoadProfile profile, SplinePropLayer layer, float start, float end, float side, Material material, int splineIndex)
+        {
+            List<Vector2> spans = PropPlacementUtility.GetVisibleSpans(layer, splineIndex, side, start, end);
+            for (int spanIndex = 0; spanIndex < spans.Count; spanIndex++)
+            {
+                Vector2 span = spans[spanIndex];
+                string sideName = side < 0f ? "Left" : side > 0f ? "Right" : "Center";
+                string sectionName = $" {sideName} - Section {spanIndex + 1}";
+                BuildSpan(parent, samples, profile, layer, span.x, span.y, side, material, start, sectionName);
+            }
+        }
+
+        private static void BuildSpan(Transform parent, IReadOnlyList<SplineSamplingUtility.Sample> samples,
+            RoadProfile profile, SplinePropLayer layer, float start, float end, float side, Material material,
+            float textureOrigin, string sectionName)
         {
             int steps = Mathf.Max(1, Mathf.CeilToInt((end - start) / 0.4f));
             var positions = new Vector3[steps + 1];
@@ -71,16 +85,17 @@ namespace Dyma.SplineLevelToolkit
                     position = RoadTerrainHeightUtility.Conform(position, layer.VerticalOffset);
                 positions[i] = position;
                 rights[i] = right;
-                distances[i] = distance - start;
+                distances[i] = distance - textureOrigin;
             }
 
             foreach (Bar bar in Bars)
             {
                 Mesh mesh = BuildBarMesh(parent, positions, rights, distances, bar);
-                var part = new GameObject("Continuous Fence " + bar.Name);
+                var part = new GameObject("Continuous Fence " + bar.Name + sectionName);
                 part.transform.SetParent(parent, false);
                 part.AddComponent<MeshFilter>().sharedMesh = mesh;
                 part.AddComponent<MeshRenderer>().sharedMaterial = material;
+                part.AddComponent<RoadFenceGeneratedMesh>().Initialize(mesh);
             }
         }
 

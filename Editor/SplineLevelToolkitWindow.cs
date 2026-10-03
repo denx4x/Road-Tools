@@ -23,6 +23,10 @@ namespace Dyma.SplineLevelToolkit.Editor
         [SerializeField] private float customDirectionAngle = 30f;
         [SerializeField] private float turnRadius = 12f;
         [SerializeField] private bool showTurnPreview;
+        [SerializeField] private bool showCreateRoad;
+        [SerializeField] private bool showMoreActions;
+        [SerializeField] private bool directionLeft;
+        [SerializeField] private RoadMaterialSectionsPanel materialSections = new RoadMaterialSectionsPanel();
         private readonly RoadTurnPreview turnPreview = new RoadTurnPreview();
         [SerializeField] private RoadKnotConnectionPanel knotConnections = new RoadKnotConnectionPanel();
         private static readonly string[] TabNames = { "Road", "Props", "Terrain", "Connections", "Test Scene" };
@@ -34,6 +38,7 @@ namespace Dyma.SplineLevelToolkit.Editor
         {
             RoadToolsWorkspace.EnsureProjectFolders();
             if (knotConnections == null) knotConnections = new RoadKnotConnectionPanel();
+            if (materialSections == null) materialSections = new RoadMaterialSectionsPanel();
             titleContent = new GUIContent("Road Tools");
             LoadDefaultProfileIfMissing();
             SplineSelection.changed += Repaint;
@@ -60,6 +65,8 @@ namespace Dyma.SplineLevelToolkit.Editor
 
         private void DrawTurnPreview(SceneView view)
         {
+            if (activeTab == 0 && Selection.activeGameObject != null)
+                materialSections.DrawScene(Selection.activeGameObject.GetComponent<SplineRoad>());
             if (activeTab == 3) knotConnections.DrawPreview();
             if (!showTurnPreview || activeTab != 0) { turnPreview.Clear(); return; }
             var road = Selection.activeGameObject != null ? Selection.activeGameObject.GetComponent<SplineRoad>() : null;
@@ -77,6 +84,8 @@ namespace Dyma.SplineLevelToolkit.Editor
             GameObject selected = Selection.activeGameObject;
             SplineContainer selectedSpline = selected != null ? selected.GetComponent<SplineContainer>() : null;
             SplineRoad selectedRoad = selected != null ? selected.GetComponent<SplineRoad>() : null;
+            if (selectedRoad == null && selected != null && selected.TryGetComponent(out RoadPropPath propPath))
+                selectedRoad = propPath.Owner;
 
             DrawHeader(selectedRoad);
             int previousTab = activeTab;
@@ -166,48 +175,61 @@ namespace Dyma.SplineLevelToolkit.Editor
                 if (GUILayout.Button("+ Point After")) InsertKnots(true);
                 EditorGUILayout.EndHorizontal();
             }
-            if (selectedRoad != null && !selectedRoad.IsBaked)
-                DrawDirectionPresets(selectedRoad);
             EndCard();
+            if (selectedRoad != null && !selectedRoad.IsBaked)
+            {
+                BeginCard("ROAD DIRECTION");
+                RoadToolsDirectionPanel.Draw(selectedRoad, turnPreview, ref directionSegmentLength, ref turnRadius, ref customDirectionAngle, ref showTurnPreview, ref directionLeft, SetStatus);
+                EndCard();
+            }
 
             if (selectedRoad != null)
             {
                 BeginCard("ROAD MATERIAL");
                 RoadToolsMaterialPanel.Draw(selectedRoad);
+                materialSections.Draw(selectedRoad);
                 EndCard();
             }
 
-            BeginCard("CREATE ROAD");
-            profile = (RoadProfile)EditorGUILayout.ObjectField("Road Profile", profile, typeof(RoadProfile), false);
-            RoadToolsMaterialPanel.DrawTemplate(ref newRoadMaterial, profile);
-            if (GUILayout.Button("Create Road From Scene View", GUILayout.Height(30)))
+            BeginCard(selectedRoad == null ? "CREATE ROAD" : "CREATE ANOTHER ROAD");
+            if (selectedRoad != null) showCreateRoad = EditorGUILayout.Foldout(showCreateRoad, "New road settings", true);
+            if (selectedRoad == null || showCreateRoad)
             {
-                SplineRoad created = CreateRoad(profile);
-                if (created != null && newRoadMaterial != null) RoadMaterialUtility.Set(created, newRoadMaterial);
-            }
-            if (profile == null)
-                EditorGUILayout.LabelField("An existing or default Road Profile will be assigned automatically.", RoadToolsWindowStyles.Body);
-            if (selected != null)
-            {
-                EditorGUILayout.Space(5);
-                if (GUILayout.Button("Set Up Road Tools on Selected GameObject", GUILayout.Height(28)))
+                profile = (RoadProfile)EditorGUILayout.ObjectField("Road Profile", profile, typeof(RoadProfile), false);
+                RoadToolsMaterialPanel.DrawTemplate(ref newRoadMaterial, profile);
+                if (GUILayout.Button("Create Road From Scene View", GUILayout.Height(30)))
                 {
-                    SplineRoad configured = RoadSetupUtility.EnsureRoad(selected, profile, targetTerrain);
-                    SetStatus(configured != null ? "Road components, profile and live updates are ready." : "Select a scene GameObject.", configured != null);
+                    SplineRoad created = CreateRoad(profile);
+                    if (created != null && newRoadMaterial != null) RoadMaterialUtility.Set(created, newRoadMaterial);
                 }
-            }
-            if (selectedSpline != null)
-            {
-                if (GUILayout.Button("Add Spline to Selected Container"))
-                    SplineRoadSceneGUI.AddSpline(selectedSpline, selected.GetComponent<SplineRoad>());
+                if (profile == null)
+                    EditorGUILayout.LabelField("An existing or default Road Profile will be assigned automatically.", RoadToolsWindowStyles.Body);
+                if (selected != null)
+                {
+                    EditorGUILayout.Space(5);
+                    if (GUILayout.Button("Set Up Road Tools on Selected GameObject", GUILayout.Height(28)))
+                    {
+                        SplineRoad configured = RoadSetupUtility.EnsureRoad(selected, profile, targetTerrain);
+                        SetStatus(configured != null ? "Road components, profile and live updates are ready." : "Select a scene GameObject.", configured != null);
+                    }
+                }
+                if (selectedSpline != null)
+                {
+                    if (GUILayout.Button("Add Spline to Selected Container"))
+                        SplineRoadSceneGUI.AddSpline(selectedSpline, selected.GetComponent<SplineRoad>());
+                }
             }
             EndCard();
 
             BeginCard("MORE ACTIONS");
-            if (selectedRoad != null && GUILayout.Button("Edit Prop Layers"))
-                activeTab = 1;
-            if (GUILayout.Button("Rebuild All Roads"))
-                RebuildAll();
+            showMoreActions = EditorGUILayout.Foldout(showMoreActions, "Recovery and prop tools", true);
+            if (showMoreActions)
+            {
+                if (selectedRoad != null && GUILayout.Button("Edit Prop Layers"))
+                    activeTab = 1;
+                if (GUILayout.Button("Rebuild All Roads"))
+                    RebuildAll();
+            }
             EndCard();
         }
 
@@ -216,70 +238,6 @@ namespace Dyma.SplineLevelToolkit.Editor
             BeginCard("ROAD PROPS");
             RoadToolsPropsPanel.Draw(selectedRoad);
             EndCard();
-        }
-
-        private void DrawDirectionPresets(SplineRoad road)
-        {
-            EditorGUILayout.Space(9);
-            EditorGUILayout.LabelField("ROAD DIRECTION", RoadToolsWindowStyles.SectionTitle);
-            if (road.Profile == null)
-            {
-                EditorGUILayout.HelpBox("Assign a Road Profile before previewing a turn.", MessageType.Info);
-                return;
-            }
-            if (!RoadDirectionPresetTool.TryGetSelectedKnot(road, out _, out int knotIndex))
-            {
-                EditorGUILayout.LabelField("Select one road point in Scene View to set the next segment direction.",
-                    RoadToolsWindowStyles.Body);
-                return;
-            }
-
-            EditorGUILayout.LabelField($"From selected point P{knotIndex + 1}: extend at the end, or move the next point.",
-                RoadToolsWindowStyles.Body);
-            directionSegmentLength = Mathf.Max(0.5f, EditorGUILayout.FloatField("Segment Length (m)", directionSegmentLength));
-            turnRadius = EditorGUILayout.FloatField("Bend Radius (m)", turnRadius);
-            EditorGUILayout.LabelField($"Minimum radius: {road.Profile.Width * 0.5f + 0.5f:0.##} m. Length follows the bend.", EditorStyles.wordWrappedMiniLabel);
-            if (GUILayout.Button("Straight (0°)", GUILayout.Height(27)))
-                ApplyDirection(road, 0f);
-            DrawDirectionRow(road, 30f, 45f);
-            DrawDirectionRow(road, 60f, 90f);
-            EditorGUILayout.BeginHorizontal();
-            customDirectionAngle = EditorGUILayout.FloatField("Custom Angle (°)", customDirectionAngle);
-            EditorGUILayout.EndHorizontal();
-            showTurnPreview = EditorGUILayout.Toggle("Show Turn Preview", showTurnPreview);
-            if (showTurnPreview)
-            {
-                turnPreview.Update(road, directionSegmentLength, customDirectionAngle, turnRadius);
-                EditorGUILayout.HelpBox(turnPreview.Plan?.Message ?? "Select a point.",
-                    turnPreview.Plan != null && turnPreview.Plan.Safe ? MessageType.Info : MessageType.Warning);
-            }
-            using (new EditorGUI.DisabledScope(!showTurnPreview || turnPreview.Plan == null || !turnPreview.Plan.Safe))
-                if (GUILayout.Button("Apply Previewed Turn", GUILayout.Height(30)))
-                {
-                    bool success = RoadDirectionPresetTool.Apply(road, directionSegmentLength, customDirectionAngle, turnRadius, out string result);
-                    SetStatus(result, success);
-                    if (success) { showTurnPreview = false; turnPreview.Clear(); }
-                    SceneView.RepaintAll();
-                }
-            if (GUI.changed) SceneView.RepaintAll();
-        }
-
-        private void DrawDirectionRow(SplineRoad road, float first, float second)
-        {
-            EditorGUILayout.BeginHorizontal();
-            if (GUILayout.Button($"Left {first:0}°")) ApplyDirection(road, -first);
-            if (GUILayout.Button($"Right {first:0}°")) ApplyDirection(road, first);
-            if (GUILayout.Button($"Left {second:0}°")) ApplyDirection(road, -second);
-            if (GUILayout.Button($"Right {second:0}°")) ApplyDirection(road, second);
-            EditorGUILayout.EndHorizontal();
-        }
-
-        private void ApplyDirection(SplineRoad road, float angleDegrees)
-        {
-            customDirectionAngle = angleDegrees;
-            showTurnPreview = true;
-            turnPreview.Update(road, directionSegmentLength, customDirectionAngle, turnRadius);
-            SceneView.RepaintAll();
         }
 
         private void DrawTerrainTab(SplineRoad selectedRoad)
@@ -563,6 +521,11 @@ namespace Dyma.SplineLevelToolkit.Editor
 
         private static void InsertKnots(bool after)
         {
+            if (Selection.activeGameObject != null && Selection.activeGameObject.TryGetComponent(out RoadPropPath path))
+            {
+                RoadPropPathKnotUtility.InsertSelected(path, after);
+                return;
+            }
             var knots = new List<SelectableKnot>();
             var splines = new List<SplineInfo>();
             foreach (GameObject selected in Selection.gameObjects)

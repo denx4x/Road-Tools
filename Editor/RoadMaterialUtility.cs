@@ -42,6 +42,7 @@ namespace Dyma.SplineLevelToolkit.Editor
         {
             if (current == null) return false;
             if (current.target is SplineRoad) return current.propertyPath == "materialOverride";
+            if (current.target is RoadMaterialSections) return current.propertyPath.StartsWith("sections", StringComparison.Ordinal);
             if (current.target is not MeshRenderer renderer ||
                 !current.propertyPath.StartsWith("m_Materials", StringComparison.Ordinal)) return false;
 

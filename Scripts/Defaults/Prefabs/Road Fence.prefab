@@ -105,6 +105,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: RoadTools.Runtime::Dyma.SplineLevelToolkit.RoadFenceModel
   longitudinalAxis: 0
   mirrorRightSide: 1
+  flipFacing: 1
   meshSubdivisionLength: 0.4
   heightSmoothingDistance: 4
   groundedSupportHeight: 0.58

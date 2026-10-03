@@ -31,6 +31,9 @@ namespace Dyma.SplineLevelToolkit.Editor
             if (!b.TryResolve(out Spline sourceB, out SplineRoad roadB, out error)) return Fail(plan, "B: " + error);
             if (sourceA == sourceB) return Fail(plan, "Choose endpoints from two different splines.");
             if (roadA.IsBaked || roadB.IsBaked) return Fail(plan, "Resume editing both roads before merging.");
+            if ((roadA.GetComponent<RoadMaterialSections>()?.Sections.Count ?? 0) > 0 ||
+                (roadB.GetComponent<RoadMaterialSections>()?.Sections.Count ?? 0) > 0)
+                return Fail(plan, "Remove local material sections before merging, then recreate them on the merged road. Their ranges cannot be remapped during a merge yet.");
             if (!roadA.isActiveAndEnabled || !roadB.isActiveAndEnabled) return Fail(plan, "Enable both road components before merging.");
             if (!roadA.LiveUpdatesEnabled || !roadB.LiveUpdatesEnabled)
                 return Fail(plan, "Enable live updates on both roads before merging so Undo can rebuild their mesh, terrain and props.");

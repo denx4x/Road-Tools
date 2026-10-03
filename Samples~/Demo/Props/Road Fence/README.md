@@ -8,3 +8,5 @@ Use `Prefabs/Road Fence.prefab` with **Props > Add Fence**, or select it as Fenc
 - `Textures/Road Fence Galvanized Steel.png`: surface texture.
 
 The prefab includes Road Fence Model settings for continuous spline deformation and terrain grounding. These sample assets are editable independently from the package defaults.
+
+**Flip Facing** is enabled on this prefab so the rail faces the road and the support posts sit behind it. **Mirror Right Side** preserves this orientation on the opposite side, including editable paths. For other models, adjust Flip Facing to match their lateral orientation, then use **Rebuild Props**.
