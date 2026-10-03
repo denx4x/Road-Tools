@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Rendering;
@@ -16,7 +17,8 @@ namespace Dyma.SplineLevelToolkit
         public int LastGeneratedMeshCount { get; private set; }
         public int LastGeneratedVertexCount { get; private set; }
 
-        public void Rebuild(SplineContainer spline, RoadProfile profile, Material materialOverride = null)
+        public void Rebuild(SplineContainer spline, RoadProfile profile, Material materialOverride = null,
+            RoadMaterialSections materialSections = null)
         {
             LastSelfOverlapReductionCount = 0;
             LastGeneratedMeshCount = 0;
@@ -51,6 +53,8 @@ namespace Dyma.SplineLevelToolkit
                 float meshSampleSpacing = needsDenseSamples ? cornerSampleSpacing : profile.SampleSpacing;
 
                 float totalLength = meshSamples[meshSamples.Count - 1].Distance;
+                IReadOnlyList<RoadMaterialSpan> materialSpans = materialSections != null
+                    ? materialSections.Resolve(spline, splineIndex, meshSamples) : Array.Empty<RoadMaterialSpan>();
                 int chunkCount = Mathf.Max(1, Mathf.CeilToInt(totalLength / Mathf.Max(1f, profile.ChunkLength)));
                 var chunkFilters = new List<MeshFilter>(chunkCount);
                 for (int chunkIndex = 0; chunkIndex < chunkCount; chunkIndex++)
@@ -65,6 +69,8 @@ namespace Dyma.SplineLevelToolkit
                         meshSampleSpacing,
                         profile,
                         materialOverride != null ? materialOverride : profile.Material,
+                        materialSections,
+                        materialSpans,
                         start,
                         end,
                         splineIndex,
@@ -111,12 +117,15 @@ namespace Dyma.SplineLevelToolkit
             float meshSampleSpacing,
             RoadProfile profile,
             Material material,
+            RoadMaterialSections materialSections,
+            IReadOnlyList<RoadMaterialSpan> materialSpans,
             float start,
             float end,
             int splineIndex,
             int chunkIndex)
         {
-            int rowCount = Mathf.Max(2, Mathf.CeilToInt((end - start) / meshSampleSpacing) + 1);
+            List<float> rowDistances = RoadMaterialMeshBuilder.RowDistances(start, end, meshSampleSpacing, materialSpans);
+            int rowCount = rowDistances.Count;
             var vertices = new Vector3[rowCount * 4];
             var uvs = new Vector2[rowCount * 4];
             var triangles = new int[(rowCount - 1) * 24 + 12];
@@ -124,7 +133,7 @@ namespace Dyma.SplineLevelToolkit
 
             for (int row = 0; row < rowCount; row++)
             {
-                float distance = Mathf.Lerp(start, end, row / (float)(rowCount - 1));
+                float distance = rowDistances[row];
                 SplineSamplingUtility.Sample sample = SplineSamplingUtility.EvaluateAtDistance(samples, distance);
                 Vector3 right = Vector3.Cross(sample.Up, sample.Tangent).normalized;
                 if (right.sqrMagnitude < 0.5f)
@@ -226,7 +235,10 @@ namespace Dyma.SplineLevelToolkit
             mesh.indexFormat = vertices.Length > 65535 ? IndexFormat.UInt32 : IndexFormat.UInt16;
             mesh.SetVertices(vertices);
             mesh.SetUVs(0, uvs);
-            mesh.SetTriangles(triangles, 0);
+            int[] materialSlots = null;
+            if (materialSpans.Count > 0)
+                materialSlots = RoadMaterialMeshBuilder.ApplyTriangles(mesh, triangles, rowDistances, materialSpans);
+            else mesh.SetTriangles(triangles, 0);
             mesh.RecalculateNormals();
             mesh.RecalculateBounds();
             mesh.RecalculateTangents();
@@ -236,6 +248,12 @@ namespace Dyma.SplineLevelToolkit
             MeshFilter filter = chunk.AddComponent<MeshFilter>();
             filter.sharedMesh = mesh;
             chunk.AddComponent<MeshRenderer>().sharedMaterial = material;
+            if (materialSlots != null)
+            {
+                RoadMaterialChunk binding = chunk.AddComponent<RoadMaterialChunk>();
+                binding.Initialize(materialSlots);
+                binding.Apply(material, materialSections);
+            }
             LastGeneratedMeshCount++;
             LastGeneratedVertexCount += mesh.vertexCount;
             return filter;

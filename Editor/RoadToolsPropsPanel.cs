@@ -35,9 +35,13 @@ namespace Dyma.SplineLevelToolkit.Editor
 
             using (new EditorGUI.DisabledScope(road.IsBaked || road.Profile == null))
             {
+                RoadToolsPropSectionsPanel.DrawGeneration(road, manager);
+                EditorGUILayout.Space(8);
                 DrawQuickAdd(road, manager);
                 EditorGUILayout.Space(10);
                 DrawCustomPreset(road);
+                EditorGUILayout.Space(10);
+                RoadToolsPropSectionsPanel.Draw(road, manager);
                 EditorGUILayout.Space(10);
                 showAdvanced = EditorGUILayout.Foldout(showAdvanced, "Advanced Prop Layers", true);
                 if (showAdvanced) DrawAdvanced(road, manager);

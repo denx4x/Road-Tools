@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.1.2 — 2026-10-03
+
+- Memperbaiki arah hadap Road Fence bawaan pada sisi kiri, kanan, dan editable path: rail menghadap jalan, dengan tiang penyangga di belakangnya.
+- Menambahkan Flip Facing pada Road Fence Model untuk mengoreksi arah model sendiri sebelum pencerminan sisi kanan, tanpa mengubah FBX atau material sumber.
+
+- Menambahkan Local Materials per bagian road menggunakan jarak atau rentang knot, pilihan spline, preset/material khusus, preview Scene, dan handle batas Distance.
+- Membagi submesh tepat pada batas material tanpa menghapus knot atau memutus UV; material utama tetap berlaku di luar section dan section terakhir mendapat prioritas pada rentang bertumpuk.
+- Mendukung Undo/Redo section, perubahan material tanpa rebuild mesh/terrain/props, serta penyimpanan section dan slot material pada scene serta mesh hasil bake.
+- Melindungi section dari kehilangan data saat Merge Roads; penggabungan meminta section dihapus lalu dibuat ulang karena pemetaan ulang rentang belum didukung.
+
+- Menambahkan Point Before / After pada editable prop path dengan pemecahan kurva yang mempertahankan bentuk, pemilihan knot baru, mode Linear / Auto Smooth / Bezier, dan Undo/Redo.
+- Merapikan Road Direction menjadi kartu terpisah dengan pilihan sisi, sudut preset, dan preview; meringkas material menjadi dropdown preset serta melipat pengaturan pembuatan road tambahan.
+- Menambahkan empat texture dan material URP: Left Edge + Center, Right Edge + Center, Edge Lines Only, dan Unmarked Asphalt.
+- Menambahkan kontrol Generate Props per road, enable per layer, dan pilihan spline yang diberi props.
+- Menambahkan celah per sisi dan per spline, pemilihan celah dari knot, serta opsi menonaktifkan seluruh spline.
+- Memisahkan sisi kiri dan kanan menjadi layer independen dengan salinan konfigurasi celah.
+- Memotong fence FBX dan fence prosedural pada batas celah tanpa menyambungkan mesh melintasi bukaan.
+- Menambahkan spline props independen yang dapat digeser dan diputar untuk membelokkan pagar tanpa mengubah road.
+- Mempertahankan celah dan jalur props saat rebuild road/terrain, mendukung Undo/Redo, serta memperbarui props saat jalur independen diedit.
+- Mempertahankan random transform props yang tidak terpengaruh celah, dan menyimpan kontrol penempatan pada preset.
+
 ## 0.1.1 — 2026-10-02
 
 - Menyertakan Road Fence pada demo sample dengan prefab, FBX sumber, mesh siap pakai, material URP, dan texture yang dapat dikustomisasi.

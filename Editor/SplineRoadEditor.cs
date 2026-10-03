@@ -32,7 +32,8 @@ namespace Dyma.SplineLevelToolkit.Editor
 
             foreach (GameObject selected in Selection.gameObjects)
             {
-                if (selected != null && selected.GetComponent<SplineRoad>() != null)
+                if (selected != null && (selected.GetComponent<SplineRoad>() != null ||
+                    selected.GetComponent<RoadPropPath>() != null))
                     return;
             }
 

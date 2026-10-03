@@ -10,11 +10,21 @@ namespace Dyma.SplineLevelToolkit
     {
         private const string GeneratedRootName = "Generated Props";
         [SerializeField] private List<SplinePropLayer> layers = new();
+        [SerializeField] private bool propsEnabled = true;
 
         public IReadOnlyList<SplinePropLayer> Layers => layers;
+        public bool PropsEnabled => propsEnabled;
         public int LastGeneratedInstanceCount { get; private set; }
 
         public void AddLayer() => layers.Add(new SplinePropLayer());
+
+        public int DuplicateLayer(int index)
+        {
+            if (index < 0 || index >= layers.Count || layers[index] == null)
+                return -1;
+            layers.Add(layers[index].Clone());
+            return layers.Count - 1;
+        }
 
         public void RemoveLayer(int index)
         {
@@ -26,9 +36,12 @@ namespace Dyma.SplineLevelToolkit
         {
             float baseHalfWidth = profile != null ? profile.Width * 0.5f : 0f;
             float radius = baseHalfWidth;
+            if (!propsEnabled)
+                return radius;
             foreach (SplinePropLayer layer in layers)
             {
-                if (layer == null || layer.Prefab == null || layer.Grounding != PropGroundingMode.RoadShoulder)
+                if (layer == null || !layer.Enabled || layer.UsesCustomPath || layer.Prefab == null ||
+                    layer.Grounding != PropGroundingMode.RoadShoulder)
                     continue;
                 float lateral = layer.Side == PropSide.Center
                     ? Mathf.Abs(layer.LateralOffset)
@@ -42,35 +55,58 @@ namespace Dyma.SplineLevelToolkit
         {
             LastGeneratedInstanceCount = 0;
             ClearGenerated();
-            if (spline == null || profile == null || spline.Splines.Count == 0)
+            if (!propsEnabled || spline == null || profile == null)
                 return;
             var root = new GameObject(GeneratedRootName);
             root.transform.SetParent(transform, false);
 
             for (int splineIndex = 0; splineIndex < spline.Splines.Count; splineIndex++)
             {
-                if (spline.Splines[splineIndex] == null || spline.Splines[splineIndex].Count < 2)
-                    continue;
-
-                float sampleSpacing = Mathf.Max(0.5f, profile.SampleSpacing);
-                foreach (SplinePropLayer layer in layers)
-                {
-                    if (layer != null && layer.ContinuousFence && layer.Prefab != null &&
-                        layer.Prefab.GetComponent<RoadFenceModel>() != null)
-                    {
-                        sampleSpacing = Mathf.Min(sampleSpacing, 0.4f);
-                        break;
-                    }
-                }
-                List<SplineSamplingUtility.Sample> samples =
-                    SplineSamplingUtility.BuildArcLengthSamples(spline, splineIndex, sampleSpacing);
-                if (samples.Count < 2)
-                    continue;
-
+                List<SplineSamplingUtility.Sample> samples = BuildSamples(spline, splineIndex, profile, null);
+                if (samples == null) continue;
                 float length = samples[samples.Count - 1].Distance;
                 foreach (SplinePropLayer layer in layers)
-                    BuildLayer(root.transform, samples, length, profile, layer, splineIndex);
+                    if (layer != null && !layer.UsesCustomPath)
+                        BuildLayer(root.transform, samples, length, profile, layer, splineIndex);
             }
+
+            // A custom fence path is authored independently; do not repeat it for every road spline.
+            foreach (SplinePropLayer layer in layers)
+            {
+                if (layer == null || !layer.UsesCustomPath || layer.CustomPath == null || !layer.Enabled)
+                    continue;
+                List<SplineSamplingUtility.Sample> samples =
+                    BuildSamples(layer.CustomPath, layer.CustomSplineIndex, profile, layer);
+                if (samples != null)
+                    BuildLayer(root.transform, samples, samples[samples.Count - 1].Distance,
+                        profile, layer, layer.CustomSplineIndex);
+            }
+        }
+
+        private List<SplineSamplingUtility.Sample> BuildSamples(SplineContainer container, int splineIndex,
+            RoadProfile profile, SplinePropLayer customLayer)
+        {
+            if (splineIndex < 0 || splineIndex >= container.Splines.Count ||
+                container.Splines[splineIndex] == null || container.Splines[splineIndex].Count < 2)
+                return null;
+            float sampleSpacing = Mathf.Max(0.5f, FiniteOr(profile.SampleSpacing, 0.5f));
+            foreach (SplinePropLayer layer in layers)
+            {
+                if (layer == null || !PropPlacementUtility.AppliesToSpline(layer, splineIndex) ||
+                    (customLayer == null ? layer.UsesCustomPath : layer != customLayer))
+                    continue;
+                if (layer.ContinuousFence && layer.Prefab != null &&
+                    layer.Prefab.GetComponent<RoadFenceModel>() != null)
+                {
+                    sampleSpacing = Mathf.Min(sampleSpacing, 0.4f);
+                    break;
+                }
+            }
+            List<SplineSamplingUtility.Sample> samples =
+                SplineSamplingUtility.BuildArcLengthSamples(container, splineIndex, sampleSpacing);
+            if (samples.Count < 2 || !IsFinite(samples[samples.Count - 1].Distance))
+                return null;
+            return samples;
         }
 
         public void ClearGenerated()
@@ -109,40 +145,49 @@ namespace Dyma.SplineLevelToolkit
             SplinePropLayer layer,
             int splineIndex)
         {
-            if (layer == null || layer.Prefab == null)
+            if (!PropPlacementUtility.AppliesToSpline(layer, splineIndex) || layer.Prefab == null ||
+                !IsFinite(length) || length <= 0f)
                 return;
 
             var layerRoot = new GameObject($"Spline {splineIndex + 1} - {layer.Name}");
             layerRoot.transform.SetParent(parent, false);
             var random = new System.Random(layer.Seed);
-            float start = Mathf.Max(layer.StartOffset, layer.IntersectionExclusionDistance);
-            float end = Mathf.Min(length - layer.EndOffset, length - layer.IntersectionExclusionDistance);
+            float exclusion = Mathf.Max(0f, FiniteOr(layer.IntersectionExclusionDistance, 0f));
+            float start = Mathf.Max(0f, FiniteOr(layer.StartOffset, 0f), exclusion);
+            float end = Mathf.Min(length, length - FiniteOr(layer.EndOffset, 0f), length - exclusion);
 
             RoadFenceModel model = layer.ContinuousFence ? layer.Prefab.GetComponent<RoadFenceModel>() : null;
             if (model != null)
             {
                 if (end > start)
                     LastGeneratedInstanceCount += RoadFenceModelGenerator.Build(
-                        layerRoot.transform, samples, profile, layer, model, start, end);
+                        layerRoot.transform, samples, profile, layer, model, start, end, splineIndex);
                 return;
             }
 
             if (layer.ContinuousFence && end > start)
-                RoadFenceMeshGenerator.Build(layerRoot.transform, samples, profile, layer, start, end);
+                RoadFenceMeshGenerator.Build(layerRoot.transform, samples, profile, layer, start, end, splineIndex);
 
-            for (float distance = start; distance <= end; distance += Mathf.Max(0.1f, layer.Spacing))
+            float spacing = Mathf.Max(0.1f, FiniteOr(layer.Spacing, 8f));
+            for (float distance = start; distance <= end;)
             {
                 SplineSamplingUtility.Sample sample = SplineSamplingUtility.EvaluateAtDistance(samples, distance);
                 if (layer.Side == PropSide.Both)
                 {
-                    Spawn(layerRoot.transform, sample, profile, layer, -1f, random);
-                    Spawn(layerRoot.transform, sample, profile, layer, 1f, random);
+                    Spawn(layerRoot.transform, sample, profile, layer, -1f, random,
+                        PropPlacementUtility.IsVisible(layer, splineIndex, -1f, distance));
+                    Spawn(layerRoot.transform, sample, profile, layer, 1f, random,
+                        PropPlacementUtility.IsVisible(layer, splineIndex, 1f, distance));
                 }
                 else
                 {
                     float side = layer.Side == PropSide.Left ? -1f : layer.Side == PropSide.Right ? 1f : 0f;
-                    Spawn(layerRoot.transform, sample, profile, layer, side, random);
+                    Spawn(layerRoot.transform, sample, profile, layer, side, random,
+                        PropPlacementUtility.IsVisible(layer, splineIndex, side, distance));
                 }
+                float next = distance + spacing;
+                if (!IsFinite(next) || next <= distance) break;
+                distance = next;
             }
         }
 
@@ -152,7 +197,8 @@ namespace Dyma.SplineLevelToolkit
             RoadProfile profile,
             SplinePropLayer layer,
             float side,
-            System.Random random)
+            System.Random random,
+            bool visible)
         {
             Vector3 right = Vector3.Cross(sample.Up, sample.Tangent).normalized;
             if (right.sqrMagnitude < 0.5f)
@@ -174,6 +220,10 @@ namespace Dyma.SplineLevelToolkit
             float maximumScale = Mathf.Max(layer.RandomScale.x, layer.RandomScale.y);
             float scale = Mathf.Lerp(minimumScale, maximumScale, (float)random.NextDouble());
 
+            // Preserve the random stream for all remaining instances when an opening is edited.
+            if (!visible)
+                return;
+
             GameObject instance = Instantiate(layer.Prefab, position, rotation, parent);
             instance.name = layer.Prefab.name;
             instance.transform.localScale = layer.Prefab.transform.localScale * scale;
@@ -191,5 +241,7 @@ namespace Dyma.SplineLevelToolkit
         }
 
         private static float NextSigned(System.Random random) => (float)(random.NextDouble() * 2.0 - 1.0);
+        private static bool IsFinite(float value) => !float.IsNaN(value) && !float.IsInfinity(value);
+        private static float FiniteOr(float value, float fallback) => IsFinite(value) ? value : fallback;
     }
 }

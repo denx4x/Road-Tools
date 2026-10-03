@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Splines;
 
 namespace Dyma.SplineLevelToolkit
 {
@@ -22,6 +24,13 @@ namespace Dyma.SplineLevelToolkit
         [SerializeField] private int seed = 12345;
         [SerializeField] private float intersectionExclusionDistance = 3f;
         [SerializeField] private bool continuousFence;
+        [SerializeField] private bool enabled = true;
+        [SerializeField] private int splineIndex = -1;
+        [SerializeField] private SplineContainer customPath;
+        [SerializeField, Min(0)] private int customSplineIndex;
+        [SerializeField] private bool useCustomPath;
+        [SerializeField] private bool mirrorCustomPath;
+        [SerializeField] private List<PropPlacementGap> gaps = new();
 
         public string Name => string.IsNullOrWhiteSpace(name) ? "Prop Layer" : name;
         public GameObject Prefab => prefab;
@@ -39,6 +48,23 @@ namespace Dyma.SplineLevelToolkit
         public int Seed => seed;
         public float IntersectionExclusionDistance => intersectionExclusionDistance;
         public bool ContinuousFence => continuousFence;
+        public bool Enabled => enabled;
+        public int SplineIndex => splineIndex;
+        public SplineContainer CustomPath => customPath;
+        public int CustomSplineIndex => customSplineIndex;
+        public bool UsesCustomPath => useCustomPath || customPath != null;
+        public bool MirrorCustomPath => mirrorCustomPath;
+        public IReadOnlyList<PropPlacementGap> Gaps => gaps;
+
+        public SplinePropLayer Clone()
+        {
+            var copy = (SplinePropLayer)MemberwiseClone();
+            copy.gaps = new List<PropPlacementGap>();
+            if (gaps != null)
+                foreach (PropPlacementGap gap in gaps)
+                    copy.gaps.Add(gap?.Clone());
+            return copy;
+        }
     }
 
     public enum PropSide

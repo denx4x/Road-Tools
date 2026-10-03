@@ -63,6 +63,14 @@ namespace Dyma.SplineLevelToolkit.Editor
         {
             if (road == null || !road.TryGetComponent(out PropLayerManager manager) || manager.Layers.Count == 0)
                 return null;
+            foreach (SplinePropLayer layer in manager.Layers)
+                if (layer != null && layer.UsesCustomPath &&
+                    (layer.CustomPath == null || !EditorUtility.IsPersistent(layer.CustomPath)))
+                {
+                    EditorUtility.DisplayDialog("Scene Prop Paths",
+                        "Editable prop paths are saved with the scene. A reusable asset preset cannot reference these scene objects. Save a road-relative setup as a preset, or save this road and its paths as a prefab.", "OK");
+                    return null;
+                }
             string folder = RoadToolsPackagePaths.GeneratedRoot + "/Presets";
             EnsureFolder(folder);
             string path = EditorUtility.SaveFilePanelInProject("Save Road Prop Preset", "Road Prop Preset", "asset",
@@ -114,6 +122,13 @@ namespace Dyma.SplineLevelToolkit.Editor
             // Replacing a default model keeps the user's positioning and variation settings.
             if (!added) return;
 
+            layer.FindPropertyRelative("enabled").boolValue = true;
+            layer.FindPropertyRelative("splineIndex").intValue = -1;
+            layer.FindPropertyRelative("customPath").objectReferenceValue = null;
+            layer.FindPropertyRelative("useCustomPath").boolValue = false;
+            layer.FindPropertyRelative("mirrorCustomPath").boolValue = false;
+            layer.FindPropertyRelative("customSplineIndex").intValue = 0;
+            layer.FindPropertyRelative("gaps").arraySize = 0;
             layer.FindPropertyRelative("side").enumValueIndex = (int)PropSide.Both;
             layer.FindPropertyRelative("grounding").enumValueIndex = (int)PropGroundingMode.Terrain;
             float fenceLength = prefab.TryGetComponent(out RoadFenceModel model) ? model.GetSegmentLength() : 3f;
@@ -135,6 +150,8 @@ namespace Dyma.SplineLevelToolkit.Editor
             for (int i = 0; i < layers.arraySize; i++)
             {
                 SerializedProperty layer = layers.GetArrayElementAtIndex(i);
+                if (layer.FindPropertyRelative("useCustomPath").boolValue ||
+                    layer.FindPropertyRelative("customPath").objectReferenceValue != null) continue;
                 string name = layer.FindPropertyRelative("name").stringValue;
                 var prefab = layer.FindPropertyRelative("prefab").objectReferenceValue as GameObject;
                 if (fence)
@@ -170,6 +187,25 @@ namespace Dyma.SplineLevelToolkit.Editor
                 target.FindPropertyRelative(field).vector3Value = source.FindPropertyRelative(field).vector3Value;
             target.FindPropertyRelative("randomScale").vector2Value = source.FindPropertyRelative("randomScale").vector2Value;
             target.FindPropertyRelative("seed").intValue = source.FindPropertyRelative("seed").intValue;
+            target.FindPropertyRelative("enabled").boolValue = source.FindPropertyRelative("enabled").boolValue;
+            target.FindPropertyRelative("splineIndex").intValue = source.FindPropertyRelative("splineIndex").intValue;
+            target.FindPropertyRelative("customPath").objectReferenceValue = source.FindPropertyRelative("customPath").objectReferenceValue;
+            target.FindPropertyRelative("useCustomPath").boolValue = source.FindPropertyRelative("useCustomPath").boolValue;
+            target.FindPropertyRelative("mirrorCustomPath").boolValue = source.FindPropertyRelative("mirrorCustomPath").boolValue;
+            target.FindPropertyRelative("customSplineIndex").intValue = source.FindPropertyRelative("customSplineIndex").intValue;
+            SerializedProperty sourceGaps = source.FindPropertyRelative("gaps");
+            SerializedProperty targetGaps = target.FindPropertyRelative("gaps");
+            targetGaps.arraySize = sourceGaps.arraySize;
+            for (int i = 0; i < sourceGaps.arraySize; i++)
+            {
+                SerializedProperty from = sourceGaps.GetArrayElementAtIndex(i);
+                SerializedProperty to = targetGaps.GetArrayElementAtIndex(i);
+                foreach (string field in new[] { "startDistance", "endDistance" })
+                    to.FindPropertyRelative(field).floatValue = from.FindPropertyRelative(field).floatValue;
+                to.FindPropertyRelative("side").enumValueIndex = from.FindPropertyRelative("side").enumValueIndex;
+                to.FindPropertyRelative("splineIndex").intValue = from.FindPropertyRelative("splineIndex").intValue;
+                to.FindPropertyRelative("entireSpline").boolValue = from.FindPropertyRelative("entireSpline").boolValue;
+            }
         }
 
         private static void EnsureFolder(string path)

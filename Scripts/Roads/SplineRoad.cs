@@ -119,9 +119,15 @@ namespace Dyma.SplineLevelToolkit
         {
             Transform root = transform.Find("Generated Road Mesh");
             if (root == null) return;
+            RoadMaterialSections sections = GetComponent<RoadMaterialSections>();
             foreach (MeshRenderer renderer in root.GetComponentsInChildren<MeshRenderer>(true))
-                renderer.sharedMaterial = EffectiveMaterial;
+            {
+                if (renderer.TryGetComponent(out RoadMaterialChunk chunk)) chunk.Apply(EffectiveMaterial, sections);
+                else renderer.sharedMaterial = EffectiveMaterial;
+            }
         }
+
+        public void RefreshMaterial() => ApplyMaterial();
 
         private void RememberValidatedState()
         {
@@ -150,7 +156,7 @@ namespace Dyma.SplineLevelToolkit
             if (splineContainer == null || splineContainer.Splines.Count == 0)
                 return LastBuildReport = new RoadBuildReport(false, "Add a spline with at least two knots.");
 
-            meshGenerator.Rebuild(splineContainer, profile, materialOverride);
+            meshGenerator.Rebuild(splineContainer, profile, materialOverride, GetComponent<RoadMaterialSections>());
             if (colliderGenerator == null)
                 colliderGenerator = gameObject.AddComponent<RoadColliderGenerator>();
             colliderGenerator.Rebuild(transform.Find("Generated Road Mesh"), profile);

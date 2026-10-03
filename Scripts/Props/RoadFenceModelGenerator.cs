@@ -54,7 +54,7 @@ namespace Dyma.SplineLevelToolkit
         }
 
         internal static int Build(Transform parent, IReadOnlyList<SplineSamplingUtility.Sample> samples,
-            RoadProfile profile, SplinePropLayer layer, RoadFenceModel model, float start, float end)
+            RoadProfile profile, SplinePropLayer layer, RoadFenceModel model, float start, float end, int splineIndex = 0)
         {
             if (!model.TryGetRootBounds(out Bounds bounds))
             {
@@ -65,14 +65,14 @@ namespace Dyma.SplineLevelToolkit
             List<SourcePart> sources = ReadSources(model, bounds);
             if (sources == null || sources.Count == 0) return 0;
 
-            int sides = 0;
+            int segments = 0;
             if (layer.Side == PropSide.Both || layer.Side == PropSide.Left)
-            { BuildSide(parent, samples, profile, layer, model, bounds, length, sources, start, end, -1f); sides++; }
+                segments += BuildSide(parent, samples, profile, layer, model, bounds, length, sources, start, end, -1f, splineIndex);
             if (layer.Side == PropSide.Both || layer.Side == PropSide.Right)
-            { BuildSide(parent, samples, profile, layer, model, bounds, length, sources, start, end, 1f); sides++; }
+                segments += BuildSide(parent, samples, profile, layer, model, bounds, length, sources, start, end, 1f, splineIndex);
             if (layer.Side == PropSide.Center)
-            { BuildSide(parent, samples, profile, layer, model, bounds, length, sources, start, end, 0f); sides++; }
-            return sides * Mathf.CeilToInt((end - start) / length);
+                segments += BuildSide(parent, samples, profile, layer, model, bounds, length, sources, start, end, 0f, splineIndex);
+            return segments;
         }
 
         private static List<SourcePart> ReadSources(RoadFenceModel model, Bounds bounds)
@@ -183,17 +183,41 @@ namespace Dyma.SplineLevelToolkit
             }
         }
 
-        private static void BuildSide(Transform parent, IReadOnlyList<SplineSamplingUtility.Sample> samples,
+        private static int BuildSide(Transform parent, IReadOnlyList<SplineSamplingUtility.Sample> samples,
             RoadProfile profile, SplinePropLayer layer, RoadFenceModel model, Bounds bounds, float segmentLength,
-            List<SourcePart> sources, float start, float end, float side)
+            List<SourcePart> sources, float start, float end, float side, int splineIndex)
         {
-            float minimum = model.Longitudinal(bounds.min);
-            bool mirror = side > 0f && model.MirrorRightSide;
+            List<Vector2> spans = PropPlacementUtility.GetVisibleSpans(layer, splineIndex, side, start, end);
+            if (spans.Count == 0) return 0;
+            // Model facing and road-side mirroring are independent. Imported models
+            // can face either lateral direction; custom paths retain their original side.
+            bool mirror = model.FlipFacing ^ (model.MirrorRightSide &&
+                (side > 0f || (side == 0f && layer.MirrorCustomPath)));
             float lateral = side == 0f ? layer.LateralOffset : side * (profile.Width * 0.5f + layer.LateralOffset);
+            // Openings share the original side axis so adding a gap never changes nearby rail height.
             RoadFencePath path = RoadFencePath.Build(samples, lateral, start, end,
                 profile.ConformRoadToTerrain || layer.Grounding == PropGroundingMode.Terrain,
                 layer.VerticalOffset, model.HeightSmoothingDistance);
             var deformation = new RoadFenceDeformation(path, model.GroundedSupportHeight);
+            int segments = 0;
+            for (int spanIndex = 0; spanIndex < spans.Count; spanIndex++)
+            {
+                Vector2 span = spans[spanIndex];
+                string sectionName = spans.Count == 1 && Mathf.Approximately(span.x, start) && Mathf.Approximately(span.y, end)
+                    ? string.Empty : $" - Section {spanIndex + 1}";
+                segments += BuildSpan(parent, model, bounds, segmentLength, sources, deformation,
+                    start, span.x, span.y, side, mirror, sectionName);
+            }
+            return segments;
+        }
+
+        private static int BuildSpan(Transform parent, RoadFenceModel model, Bounds bounds, float segmentLength,
+            List<SourcePart> sources, RoadFenceDeformation deformation, float segmentOrigin,
+            float start, float end, float side, bool mirror, string sectionName)
+        {
+            float minimum = model.Longitudinal(bounds.min);
+            var generatedSegments = new HashSet<int>();
+            int firstSegment = Mathf.Max(0, Mathf.FloorToInt((start - segmentOrigin) / segmentLength));
             foreach (SourcePart source in sources)
             {
                 var vertices = new List<Vector3>(); var normals = new List<Vector3>();
@@ -204,9 +228,14 @@ namespace Dyma.SplineLevelToolkit
                 var triangles = new List<int>[source.Triangles.Length];
                 for (int submesh = 0; submesh < triangles.Length; submesh++) triangles[submesh] = new List<int>();
 
-                for (float segmentStart = start; segmentStart < end - 0.0001f; segmentStart += segmentLength)
+                for (int segment = firstSegment; ; segment++)
                 {
-                    float remaining = Mathf.Min(segmentLength, end - segmentStart);
+                    float segmentStart = segmentOrigin + segment * segmentLength;
+                    if (segmentStart >= end - 0.0001f) break;
+                    float visibleStart = Mathf.Max(0f, start - segmentStart);
+                    float visibleEnd = Mathf.Min(segmentLength, end - segmentStart);
+                    if (visibleEnd - visibleStart <= 0.0001f) continue;
+                    int beforeSegment = vertices.Count;
                     for (int submesh = 0; submesh < triangles.Length; submesh++)
                     {
                         List<Vertex> input = source.Triangles[submesh];
@@ -215,10 +244,13 @@ namespace Dyma.SplineLevelToolkit
                             List<Vertex> clipped = input;
                             int firstVertex = triangle;
                             int lastVertex = triangle + 3;
-                            if (remaining < segmentLength - 0.0001f)
+                            if (visibleStart > 0.0001f || visibleEnd < segmentLength - 0.0001f)
                             {
                                 var polygon = new List<Vertex>(4) { input[triangle], input[triangle + 1], input[triangle + 2] };
-                                polygon = Clip(polygon, model, minimum + remaining, false);
+                                if (visibleStart > 0.0001f)
+                                    polygon = Clip(polygon, model, minimum + visibleStart, true);
+                                if (visibleEnd < segmentLength - 0.0001f)
+                                    polygon = Clip(polygon, model, minimum + visibleEnd, false);
                                 clipped = new List<Vertex>(); AddTriangles(clipped, polygon);
                                 firstVertex = 0;
                                 lastVertex = clipped.Count;
@@ -250,9 +282,10 @@ namespace Dyma.SplineLevelToolkit
                             }
                         }
                     }
+                    if (vertices.Count > beforeSegment) generatedSegments.Add(segment);
                 }
                 if (vertices.Count == 0) continue;
-                var mesh = new Mesh { name = "Road Fence Model " + source.Renderer.name };
+                var mesh = new Mesh { name = "Road Fence Model " + source.Renderer.name + sectionName };
                 if (vertices.Count > 65535) mesh.indexFormat = IndexFormat.UInt32;
                 mesh.SetVertices(vertices);
                 mesh.subMeshCount = triangles.Length;
@@ -262,7 +295,7 @@ namespace Dyma.SplineLevelToolkit
                 if (source.HasTangents) mesh.SetTangents(tangents); else if (source.UvChannels[0]) mesh.RecalculateTangents();
                 if (source.HasColors) mesh.SetColors(colors);
                 mesh.RecalculateBounds();
-                var part = new GameObject($"Road Fence Model {(side < 0f ? "Left" : side > 0f ? "Right" : "Center")} - {source.Renderer.name}");
+                var part = new GameObject($"Road Fence Model {(side < 0f ? "Left" : side > 0f ? "Right" : "Center")} - {source.Renderer.name}{sectionName}");
                 part.transform.SetParent(parent, false);
                 part.AddComponent<MeshFilter>().sharedMesh = mesh;
                 MeshRenderer renderer = part.AddComponent<MeshRenderer>();
@@ -271,6 +304,7 @@ namespace Dyma.SplineLevelToolkit
                 renderer.receiveShadows = source.Renderer.receiveShadows;
                 part.AddComponent<RoadFenceGeneratedMesh>().Initialize(mesh);
             }
+            return generatedSegments.Count;
         }
 
         private static Vector3 ModelDirection(Vector3 value, RoadFenceModel model, bool mirror)

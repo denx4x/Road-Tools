@@ -11,55 +11,41 @@ namespace Dyma.SplineLevelToolkit.Editor
             Material selected = road.MaterialOverride;
             DrawChoice(ref selected, road.Profile);
             if (selected != road.MaterialOverride) RoadMaterialUtility.Set(road, selected);
-            EditorGUILayout.LabelField(road.IsBaked
-                ? "Material changes apply to this baked road immediately."
-                : "Material changes apply to this road immediately.", RoadToolsWindowStyles.Body);
+            EditorGUILayout.LabelField("Main material applies outside local sections. Local overrides stay unchanged.", RoadToolsWindowStyles.Body);
         }
 
-        internal static void DrawTemplate(ref Material selected, RoadProfile profile)
-        {
-            DrawChoice(ref selected, profile);
-            EditorGUILayout.LabelField("Used by the next road you create. None uses the Road Profile material.",
-                RoadToolsWindowStyles.Body);
-        }
+        internal static void DrawTemplate(ref Material selected, RoadProfile profile) => DrawChoice(ref selected, profile);
 
-        private static void DrawChoice(ref Material selected, RoadProfile profile)
+        internal static void DrawChoice(ref Material selected, RoadProfile profile, bool preview = true, string defaultLabel = null)
         {
-            Material profileMaterial = profile != null ? profile.Material : null;
-            EditorGUI.BeginChangeCheck();
-            Material chosen = (Material)EditorGUILayout.ObjectField("Road Material", selected,
-                typeof(Material), false);
-            if (EditorGUI.EndChangeCheck()) selected = chosen;
-
-            EditorGUILayout.Space(5);
-            Material marked = RoadToolsPackagePaths.LoadDefault<Material>("Materials/Road Asphalt Marked.mat");
-            bool wide = EditorGUIUtility.currentViewWidth >= 400f;
-            if (wide) EditorGUILayout.BeginHorizontal();
-            if (DrawCard("Profile Default", profileMaterial, selected == null)) selected = null;
-            if (marked != null && DrawCard("Marked Asphalt", marked, selected == marked)) selected = marked;
-            if (wide) EditorGUILayout.EndHorizontal();
-            if (selected != null && GUILayout.Button("Reset to Profile Material")) selected = null;
-        }
-
-        private static bool DrawCard(string label, Material material, bool selected)
-        {
-            Rect rect = GUILayoutUtility.GetRect(GUIContent.none, EditorStyles.miniButton,
-                GUILayout.MinWidth(150f), GUILayout.ExpandWidth(true), GUILayout.Height(62f));
-            Color previous = GUI.backgroundColor;
-            if (selected) GUI.backgroundColor = EditorGUIUtility.isProSkin
-                ? new Color(0.55f, 0.78f, 1f) : new Color(0.62f, 0.81f, 1f);
-            bool clicked = GUI.Button(rect, GUIContent.none, EditorStyles.miniButton);
-            GUI.backgroundColor = previous;
-            Texture preview = material != null
-                ? AssetPreview.GetAssetPreview(material) ?? AssetPreview.GetMiniThumbnail(material)
-                : EditorGUIUtility.IconContent("Material Icon").image;
-            if (preview != null)
-                GUI.DrawTexture(new Rect(rect.x + 7f, rect.y + 7f, 48f, 48f), preview, ScaleMode.ScaleToFit);
-            GUI.Label(new Rect(rect.x + 62f, rect.y + 8f, Mathf.Max(10f, rect.width - 68f), 22f), label,
-                EditorStyles.boldLabel);
-            GUI.Label(new Rect(rect.x + 62f, rect.y + 30f, Mathf.Max(10f, rect.width - 68f), 24f),
-                material != null ? material.name : "No profile material", RoadToolsWindowStyles.Body);
-            return clicked;
+            int current = RoadMaterialPresetCatalog.Find(selected);
+            string[] labels = RoadMaterialPresetCatalog.Labels;
+            if (defaultLabel != null) { labels = (string[])labels.Clone(); labels[0] = defaultLabel; }
+            if (current < 0)
+            {
+                labels = new string[labels.Length + 1];
+                RoadMaterialPresetCatalog.Labels.CopyTo(labels, 0);
+                if (defaultLabel != null) labels[0] = defaultLabel;
+                labels[labels.Length - 1] = "Custom Material";
+                current = labels.Length - 1;
+            }
+            int choice = EditorGUILayout.Popup("Surface Preset", current, labels);
+            if (choice != current)
+            {
+                Material preset = RoadMaterialPresetCatalog.Load(choice);
+                if (choice == 0 || preset != null) selected = preset;
+            }
+            selected = (Material)EditorGUILayout.ObjectField("Material Override", selected, typeof(Material), false);
+            if (!preview) return;
+            Material effective = selected != null ? selected : profile != null ? profile.Material : null;
+            EditorGUILayout.Space(4);
+            Rect rect = GUILayoutUtility.GetRect(0, 68, GUILayout.ExpandWidth(true));
+            Texture texture = effective != null ? effective.mainTexture : null;
+            if (texture != null)
+                GUI.DrawTexture(new Rect(rect.x, rect.y, 64, 64), texture, ScaleMode.ScaleToFit);
+            var label = new Rect(rect.x + 74, rect.y + 5, Mathf.Max(1, rect.width - 74), 55);
+            GUI.Label(label, effective != null ? effective.name + "\nLeft / right follows spline direction." :
+                "No material assigned.\nChoose a preset or your own material.", RoadToolsWindowStyles.Body);
         }
     }
 }
