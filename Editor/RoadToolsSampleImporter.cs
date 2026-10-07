@@ -30,13 +30,6 @@ namespace Dyma.SplineLevelToolkit.Editor
                 return false;
             }
 
-            if (AssetDatabase.LoadAssetAtPath<SceneAsset>(DemoDestination + "/Scenes/Road Tools Demo.unity") != null)
-            {
-                RoadToolsWorkspace.PingAsset(DemoDestination);
-                message = "Existing demo selected at " + DemoDestination + ". Your assets were kept.";
-                return true;
-            }
-
             try
             {
                 PackageInfo package = FindPackage();
@@ -71,48 +64,12 @@ namespace Dyma.SplineLevelToolkit.Editor
         private static bool ImportSample(Sample sample, out string message, out MessageType type)
         {
             type = MessageType.Info;
-            string previousAsset = FindExistingSampleAsset(sample.resolvedPath, out bool existingScene);
-            if (!string.IsNullOrEmpty(previousAsset))
-            {
-                RoadToolsWorkspace.PingAsset(previousAsset);
-                message = existingScene
-                    ? "Existing demo selected at " + previousAsset + ". Your assets were kept."
-                    : "Some demo assets already exist at " + previousAsset + ". " +
-                      "A duplicate import was skipped to keep existing asset references intact.";
-                if (!existingScene) type = MessageType.Warning;
-                return existingScene;
-            }
-
             string importedPath = ToAssetPath(sample.importPath);
-            if (sample.isImported || (!string.IsNullOrEmpty(importedPath) &&
-                                      AssetDatabase.IsValidFolder(importedPath)))
-            {
-                if (!string.IsNullOrEmpty(importedPath)) RoadToolsWorkspace.PingAsset(importedPath);
-                message = "The demo is already imported. Its existing assets were kept.";
-                return true;
-            }
-
-            if (!sample.Import(Sample.ImportOptions.HideImportWindow))
-            {
-                message = "Unity could not import the demo. Existing imports were kept.";
-                type = MessageType.Error;
-                return false;
-            }
-
-            AssetDatabase.Refresh();
-            importedPath = ToAssetPath(sample.importPath);
-            if (string.IsNullOrEmpty(importedPath) || !AssetDatabase.IsValidFolder(importedPath))
-            {
-                message = "Unity imported the demo but its folder is not available yet. " +
-                          "Check the Samples section in Package Manager.";
-                type = MessageType.Warning;
-                return false;
-            }
-
-            // Keep Unity's canonical location so Package Manager can track and reimport this sample.
+            if (string.IsNullOrEmpty(importedPath))
+                throw new ArgumentException("Unity returned an invalid sample import path.");
+            bool success = RoadToolsSampleContent.Repair(sample.resolvedPath, importedPath, out message);
             RoadToolsWorkspace.PingAsset(importedPath);
-            message = "Demo imported at " + importedPath + ". Open its scene when you are ready.";
-            return true;
+            return success;
         }
 
         private static PackageInfo FindPackage()
@@ -123,44 +80,6 @@ namespace Dyma.SplineLevelToolkit.Editor
                 if (package.name == RoadToolsPackagePaths.PackageName) return package;
             return null;
         }
-
-        private static string FindExistingSampleAsset(string sourcePath, out bool existingScene)
-        {
-            existingScene = false;
-            if (!Directory.Exists(sourcePath)) return null;
-            string[] metadata = Directory.GetFiles(sourcePath, "*.meta", SearchOption.AllDirectories);
-            Array.Sort(metadata, (left, right) =>
-                IsSceneMeta(right).CompareTo(IsSceneMeta(left)));
-            foreach (string metaPath in metadata)
-            {
-                foreach (string line in File.ReadLines(metaPath))
-                {
-                    if (!line.StartsWith("guid: ", StringComparison.Ordinal)) continue;
-                    string existingPath = AssetDatabase.GUIDToAssetPath(line.Substring(6).Trim());
-                    bool sceneCandidate = IsSceneMeta(metaPath);
-                    if (existingPath.StartsWith("Assets/", StringComparison.Ordinal) &&
-                        ExistingAssetIsPresent(existingPath, sceneCandidate))
-                    {
-                        existingScene = sceneCandidate;
-                        return existingPath;
-                    }
-                    break;
-                }
-            }
-            return null;
-        }
-
-        private static bool ExistingAssetIsPresent(string assetPath, bool scene)
-        {
-            // GUIDToAssetPath can retain mappings for assets that were deleted or moved outside Unity.
-            string fullPath = RoadToolsWorkspace.ToFullPath(assetPath);
-            if (scene)
-                return File.Exists(fullPath) && AssetDatabase.LoadAssetAtPath<SceneAsset>(assetPath) != null;
-            return File.Exists(fullPath) || Directory.Exists(fullPath);
-        }
-
-        private static bool IsSceneMeta(string path) =>
-            path.EndsWith(".unity.meta", StringComparison.OrdinalIgnoreCase);
 
         private static string ToAssetPath(string path)
         {

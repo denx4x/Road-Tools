@@ -52,6 +52,9 @@ namespace Dyma.SplineLevelToolkit
         }
 
         public void Rebuild(SplineContainer spline, RoadProfile profile)
+            => Rebuild(spline, profile, null);
+
+        internal void Rebuild(SplineContainer spline, RoadProfile profile, RoadJunctionLayout layout)
         {
             LastGeneratedInstanceCount = 0;
             ClearGenerated();
@@ -59,6 +62,7 @@ namespace Dyma.SplineLevelToolkit
                 return;
             var root = new GameObject(GeneratedRootName);
             root.transform.SetParent(transform, false);
+            RoadJunctionLayout junctions = layout ?? RoadJunctionLayout.Build(spline, profile);
 
             for (int splineIndex = 0; splineIndex < spline.Splines.Count; splineIndex++)
             {
@@ -67,7 +71,8 @@ namespace Dyma.SplineLevelToolkit
                 float length = samples[samples.Count - 1].Distance;
                 foreach (SplinePropLayer layer in layers)
                     if (layer != null && !layer.UsesCustomPath)
-                        BuildLayer(root.transform, samples, length, profile, layer, splineIndex);
+                        BuildLayer(root.transform, samples, length, profile,
+                            junctions.WithOpenings(layer, splineIndex, samples, profile), splineIndex);
             }
 
             // A custom fence path is authored independently; do not repeat it for every road spline.
@@ -79,7 +84,8 @@ namespace Dyma.SplineLevelToolkit
                     BuildSamples(layer.CustomPath, layer.CustomSplineIndex, profile, layer);
                 if (samples != null)
                     BuildLayer(root.transform, samples, samples[samples.Count - 1].Distance,
-                        profile, layer, layer.CustomSplineIndex);
+                        profile, junctions.WithOpenings(layer, layer.CustomSplineIndex, samples, profile, true),
+                        layer.CustomSplineIndex);
             }
         }
 

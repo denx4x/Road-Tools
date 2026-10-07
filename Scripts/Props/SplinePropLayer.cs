@@ -55,6 +55,7 @@ namespace Dyma.SplineLevelToolkit
         public bool UsesCustomPath => useCustomPath || customPath != null;
         public bool MirrorCustomPath => mirrorCustomPath;
         public IReadOnlyList<PropPlacementGap> Gaps => gaps;
+        internal void AddDerivedGap(PropPlacementGap gap) => gaps.Add(gap);
 
         public SplinePropLayer Clone()
         {

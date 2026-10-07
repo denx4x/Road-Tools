@@ -11,6 +11,8 @@ namespace Dyma.SplineLevelToolkit.Editor
         [SerializeField] private RoadKnotConnectionReference endpointA;
         [SerializeField] private RoadKnotConnectionReference endpointB;
         [SerializeField] private bool showPreview = true;
+        [SerializeField] private bool keepBranches = true;
+        [SerializeField] private int removeConnection;
         [NonSerialized] private RoadKnotConnectionPlan cachedPlan;
         [NonSerialized] private RoadKnotConnectionReference lastObserved;
 
@@ -36,7 +38,7 @@ namespace Dyma.SplineLevelToolkit.Editor
 
         internal void Draw(Action<string, bool> setStatus)
         {
-            EditorGUILayout.HelpBox("Select endpoint A, then endpoint B in Scene View. Merge creates one continuous spline on road A; source points and existing curves are preserved. Internal knots require a junction instead.", MessageType.Info);
+            EditorGUILayout.HelpBox("Select knot A, then knot B in Scene View. Join Knots supports internal knots and keeps every branch. Merge Splines joins two endpoints into one continuous spline.", MessageType.Info);
             DrawEndpoint("A", ref endpointA);
             DrawEndpoint("B", ref endpointB);
             EditorGUILayout.BeginHorizontal();
@@ -46,22 +48,67 @@ namespace Dyma.SplineLevelToolkit.Editor
             { endpointA = endpointB = lastObserved = null; cachedPlan = null; }
             EditorGUILayout.EndHorizontal();
             showPreview = EditorGUILayout.Toggle("Show Connection Preview", showPreview);
+            keepBranches = EditorGUILayout.Popup("Connection Type", keepBranches ? 1 : 0,
+                new[] { "Merge Splines (Endpoints)", "Join Knots (Keep Branches)" }) == 1;
             cachedPlan = RoadKnotConnectionGeometry.Plan(endpointA, endpointB);
-            EditorGUILayout.HelpBox(cachedPlan.Message, cachedPlan.Succeeded && !cachedPlan.TightBend ? MessageType.Info : MessageType.Warning);
-            using (new EditorGUI.DisabledScope(!cachedPlan.Succeeded || cachedPlan.TightBend))
-                if (GUILayout.Button("Merge Roads — Sambungkan Spline", GUILayout.Height(32)))
+            bool canJoin = RoadKnotJunctionGeometry.Validate(endpointA, endpointB, out string junctionMessage);
+            bool canConnect = keepBranches ? canJoin : cachedPlan.Succeeded && !cachedPlan.TightBend;
+            EditorGUILayout.HelpBox(keepBranches ? junctionMessage : cachedPlan.Message,
+                canConnect ? MessageType.Info : MessageType.Warning);
+            using (new EditorGUI.DisabledScope(!canConnect))
+                if (GUILayout.Button(keepBranches ? "Join Knots — Sambungkan Titik" : "Merge Roads — Sambungkan Spline", GUILayout.Height(32)))
                 {
-                    bool merged = RoadKnotConnectionUtility.Merge(endpointA, endpointB, out _, out string message);
+                    string message;
+                    bool merged = keepBranches
+                        ? RoadKnotJunctionUtility.Join(endpointA, endpointB, out _, out message)
+                        : RoadKnotConnectionUtility.Merge(endpointA, endpointB, out _, out message);
                     setStatus(message, merged);
                     if (merged) { endpointA = endpointB = lastObserved = null; cachedPlan = null; }
                 }
+            var selected = RoadKnotConnectionUtility.SelectedKnots();
+            RoadKnotConnectionReference single = selected.Count == 1 ? selected[0] : null;
+            using (new EditorGUI.DisabledScope(!RoadKnotJunctionUtility.CanUnlink(single)))
+                if (GUILayout.Button("Unlink Selected Knot"))
+                {
+                    bool unlinked = RoadKnotJunctionUtility.Unlink(single, out string message);
+                    setStatus(message, unlinked);
+                    cachedPlan = null;
+                }
+            SplineRoad road = Selection.activeGameObject != null
+                ? Selection.activeGameObject.GetComponentInParent<SplineRoad>() : null;
+            DrawRemoval(road, setStatus);
+            using (new EditorGUI.DisabledScope(road == null || road.IsBaked || road.Profile == null))
+                if (GUILayout.Button("Refresh Junction Cleanup"))
+                {
+                    bool refreshed = RoadJunctionSetupUtility.Refresh(road, out string message);
+                    setStatus(message, refreshed);
+                }
             if (GUI.changed) SceneView.RepaintAll();
+        }
+
+        private void DrawRemoval(SplineRoad road, Action<string,bool> setStatus)
+        {
+            var container=road!=null?road.GetComponent<SplineContainer>():null;
+            var connections=RoadKnotConnectionRemoval.Candidates(container);
+            if(connections.Count==0)return;
+            EditorGUILayout.Space();EditorGUILayout.LabelField("REMOVE CONNECTION",EditorStyles.boldLabel);
+            var labels=new string[connections.Count];
+            for(int i=0;i<labels.Length;i++)labels[i]=$"Spline {connections[i]+1}"+
+                (RoadKnotConnectionRemoval.IsTracked(container.Splines[connections[i]])?" — Connector":" — Legacy linked path (verify)");
+            removeConnection=EditorGUILayout.Popup("Connector",Mathf.Clamp(removeConnection,0,connections.Count-1),labels);
+            EditorGUILayout.HelpBox("Removes the selected connector spline, including its local sections. Source roads remain as separate branches in this container. It does not restore the original GameObjects. For coincident knots, use Unlink Selected Knot.",MessageType.Info);
+            using(new EditorGUI.DisabledScope(road.IsBaked))
+                if(GUILayout.Button("Remove Connection — Hapus Sambungan"))
+                {
+                    bool removed=RoadKnotConnectionRemoval.Remove(road,connections[removeConnection],out string message);
+                    setStatus(message,removed);endpointA=endpointB=lastObserved=null;cachedPlan=null;
+                }
         }
 
         private void DrawEndpoint(string name, ref RoadKnotConnectionReference endpoint)
         {
             EditorGUILayout.BeginHorizontal();
-            EditorGUILayout.LabelField($"Endpoint {name}", endpoint?.Label ?? "Not selected", EditorStyles.wordWrappedMiniLabel);
+            EditorGUILayout.LabelField($"Knot {name}", endpoint?.Label ?? "Not selected", EditorStyles.wordWrappedMiniLabel);
             var selected = RoadKnotConnectionUtility.SelectedKnots();
             using (new EditorGUI.DisabledScope(selected.Count != 1))
                 if (GUILayout.Button("Capture " + name, GUILayout.Width(86)))
@@ -78,7 +125,15 @@ namespace Dyma.SplineLevelToolkit.Editor
             Handles.zTest = UnityEngine.Rendering.CompareFunction.Always;
             DrawMarker(endpointA, "A", new Color(0.1f, 0.8f, 1f));
             DrawMarker(endpointB, "B", new Color(1f, 0.65f, 0.1f));
-            if (cachedPlan.Succeeded && cachedPlan.HasBridge)
+            if (keepBranches && RoadKnotJunctionGeometry.Validate(endpointA, endpointB, out _))
+            {
+                Handles.color = new Color(0.2f, 1f, 0.55f);
+                Handles.DrawDottedLine(endpointA.Position, endpointB.Position, 4f);
+                Handles.Label((endpointA.Position + endpointB.Position) * 0.5f,
+                    RoadKnotJunctionBridge.NeedsBridge(endpointA.Position, endpointB.Position)
+                        ? "Editable connector (source knots stay)" : "Shared knot", EditorStyles.boldLabel);
+            }
+            else if (!keepBranches && cachedPlan.Succeeded && cachedPlan.HasBridge)
             {
                 Handles.color = cachedPlan.TightBend ? new Color(1f, 0.35f, 0.2f) : new Color(0.2f, 1f, 0.55f);
                 var points = new Vector3[65];
@@ -98,7 +153,7 @@ namespace Dyma.SplineLevelToolkit.Editor
             float size = HandleUtility.GetHandleSize(point);
             Handles.color = color;
             Handles.DrawWireDisc(point, Vector3.up, size * 0.16f);
-            Handles.Label(point + Vector3.up * size * 0.2f, "Merge " + label, EditorStyles.boldLabel);
+            Handles.Label(point + Vector3.up * size * 0.2f, "Knot " + label, EditorStyles.boldLabel);
         }
     }
 }
