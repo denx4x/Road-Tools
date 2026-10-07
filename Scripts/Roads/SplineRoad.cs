@@ -160,7 +160,7 @@ namespace Dyma.SplineLevelToolkit
             if (colliderGenerator == null)
                 colliderGenerator = gameObject.AddComponent<RoadColliderGenerator>();
             colliderGenerator.Rebuild(transform.Find("Generated Road Mesh"), profile);
-            if (rebuildProps) propLayerManager.Rebuild(splineContainer, profile);
+            if (rebuildProps) propLayerManager.Rebuild(splineContainer, profile, meshGenerator.LastJunctionLayout);
             if (meshGenerator.LastGeneratedMeshCount == 0)
                 return LastBuildReport = new RoadBuildReport(false, "No road mesh was generated. Check the spline knots.");
 

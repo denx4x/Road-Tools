@@ -33,18 +33,18 @@ namespace Dyma.SplineLevelToolkit.Editor
         {
             spline = null;
             road = null;
-            error = "Select a road endpoint in Scene View.";
+            error = "Select a road knot in Scene View.";
             if (container == null) return false;
             if (container.Splines.Count != splineCount || splineIndex < 0 || splineIndex >= container.Splines.Count)
             {
-                error = "The spline collection changed. Capture this endpoint again.";
+                error = "The spline collection changed. Capture this knot again.";
                 return false;
             }
             spline = container.Splines[splineIndex];
             if (spline == null || spline.Count != knotCount || knotIndex < 0 || knotIndex >= spline.Count ||
                 (capturedSpline != null && capturedSpline != spline))
             {
-                error = "Knots were added, removed or replaced. Capture this endpoint again.";
+                error = "Knots were added, removed or replaced. Capture this knot again.";
                 return false;
             }
             road = container.GetComponent<SplineRoad>();

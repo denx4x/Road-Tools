@@ -1,6 +1,28 @@
 # Changelog
 
-## 0.1.2 — 2026-10-03
+## 0.1.3 — 2026-10-07
+
+- Memperbaiki Import Demo Sample yang menganggap folder/aset parsial sebagai impor lengkap; menambahkan perbaikan file yang hilang tanpa menimpa aset pengguna.
+- Melengkapi Demo dengan salinan material, texture, prefab, dan profile yang terpisah dari defaults paket, termasuk seluruh varian asphalt.
+
+- Clearance junction memperhitungkan ukuran prefab dan offset props; footprint pemotongan mengikuti sampling, lebar, chunk, dan batas Local Materials dari mesh jalan.
+- Area tanpa markah mencakup overlap cabang bersudut lalu dibatasi pada siklus UV utuh, sehingga garis tidak terpotong menjadi fragmen kecil.
+- Menambahkan Remove Connection / Hapus Sambungan untuk penghubung Join Knots, dengan remap material, layer props, celah, Undo/Redo, dan dukungan setelah scene dibuka ulang. Cabang sumber tetap dalam container gabungan.
+- Menambahkan cleanup junction linked: pemotongan overlap mesh/collider, material area tengah tanpa markah yang dapat diganti, dan bukaan props/fence otomatis yang mengikuti perubahan knot tanpa mengubah celah manual.
+- Mendukung bukaan pada fence FBX, fence prosedural, props terpisah, serta editable prop path; menambahkan Refresh Junction Cleanup untuk road yang sudah digabung.
+- Memperbaiki urutan indeks end cap saat kedua ujung chunk memakai slot material yang sama, agar tidak menghasilkan segitiga lintas ujung jalan.
+
+- Memperbaiki Join Knots berjauhan yang sebelumnya menarik knot tengah dan merusak segmen tetangganya: menambahkan penghubung editable dalam container gabungan dengan ikatan terpisah di kedua ujung; knot berimpit tetap memakai ikatan langsung.
+- Memperbaiki perekaman Undo saat komponen Local Materials otomatis ditambahkan sebelum perubahan array spline.
+
+- Memperbaiki Join Knots antar-road yang sebelumnya ditolak saat ada Local Materials: section A dipertahankan dan section B dipetakan ke indeks spline baru, termasuk referensi material, rentang Distance/Knots, status aktif, Undo/Redo, dan penyimpanan scene.
+
+- Menambahkan Join Knots (Keep Branches) untuk menghubungkan knot tengah, ujung, atau spline tertutup tanpa menghapus knot dan cabang.
+- Memakai link Unity Splines untuk posisi knot bersama, migrasi seluruh spline dan link antar-container, serta Unlink Selected Knot.
+- Mempertahankan kurva dunia saat transform road berbeda, data spline, Undo/Redo, dan link setelah scene dibuka ulang.
+- Mempertahankan mode Merge Splines (Endpoints) dan menambahkan panduan batasan profil, material lokal, dan permukaan persimpangan.
+
+## 0.1.2 â€” 2026-10-03
 
 - Memperbaiki arah hadap Road Fence bawaan pada sisi kiri, kanan, dan editable path: rail menghadap jalan, dengan tiang penyangga di belakangnya.
 - Menambahkan Flip Facing pada Road Fence Model untuk mengoreksi arah model sendiri sebelum pencerminan sisi kanan, tanpa mengubah FBX atau material sumber.
@@ -21,7 +43,7 @@
 - Mempertahankan celah dan jalur props saat rebuild road/terrain, mendukung Undo/Redo, serta memperbarui props saat jalur independen diedit.
 - Mempertahankan random transform props yang tidak terpengaruh celah, dan menyimpan kontrol penempatan pada preset.
 
-## 0.1.1 — 2026-10-02
+## 0.1.1 â€” 2026-10-02
 
 - Menyertakan Road Fence pada demo sample dengan prefab, FBX sumber, mesh siap pakai, material URP, dan texture yang dapat dikustomisasi.
 
@@ -41,7 +63,7 @@
 - Memakai jalur ketinggian fence yang dihaluskan pada terrain, menjaga penampang rail, dan menyesuaikan kaki tiang ke tanah secara terpisah.
 - Memperbaiki normal fence sesuai deformasi dan memakai mesh turunan Road Fence Clean untuk menghilangkan empat sirip segitiga pada model bawaan tanpa mengubah FBX.
 
-## 0.1.0 — 2026-10-01
+## 0.1.0 â€” 2026-10-01
 
 - Menyiapkan Road Tools sebagai paket Unity Package Manager `com.denx4x.road-tools` untuk instalasi melalui Git URL atau package dari disk.
 - Memisahkan script jalan dan alat Editor menggunakan assembly definition.

@@ -16,7 +16,7 @@ MonoBehaviour:
   thickness: 0.15
   sampleSpacing: 0.75
   chunkLength: 20
-  material: {fileID: 2100000, guid: e263bfa6ea39bce4ead6118acb0f6996, type: 2}
+  material: {fileID: 2100000, guid: 9b8e579429155e35931d1252be882b72, type: 2}
   uvMetersPerTile: 8
   colliderMode: 1
   conformRoadToTerrain: 1

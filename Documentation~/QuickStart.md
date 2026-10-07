@@ -62,6 +62,27 @@ Pada **ROAD DIRECTION**, pilih satu knot road, tentukan panjang/radius, sisi Lef
 
 Celah disimpan sebagai jarak dari awal spline, bukan sebagai ikatan ke knot. Jalur independen tidak mengikuti perubahan bentuk road berikutnya, tetapi tetap digunakan saat rebuild road/terrain. Simpan scene untuk menyimpan jalur tersebut. Preset aset mendukung sisi dan celah; konfigurasi dengan jalur scene disimpan sebagai scene atau prefab road.
 
+## Menghubungkan knot dan cabang
+
+1. Buka **Connections**, lalu pilih **Connection Type > Join Knots (Keep Branches)**.
+2. Pilih knot A dan B; gunakan **Capture A / Capture B** untuk menetapkan pilihan. Knot tengah, ujung, dan spline tertutup didukung.
+3. Tekan **Join Knots — Sambungkan Titik**. Jika berjauhan, A dan B dihubungkan dengan spline Bezier lurus yang dapat diedit dalam container gabungan; knot asal tetap di tempatnya. Jika berimpit (maksimum 1 cm), knot langsung diikat bersama. Semua knot dan cabang tetap ada.
+4. Pada penghubung, geser A atau B untuk menggerakkan ujung penghubung di sisi itu; ujung lainnya tetap di tempatnya. Pada knot berimpit, posisi semua knot pada sambungan bergerak bersama. Tangent dan rotasi cabang tetap terpisah. Pilih satu knot dan tekan **Unlink Selected Knot** untuk melepas ikatan.
+
+Jika road berasal dari GameObject berbeda, seluruh spline B masuk ke container A dan memakai profil, material utama, serta props A. Kurva B dipertahankan dengan handle Bezier. Road B dinonaktifkan, tetapi objek dan child pengguna dipertahankan. Lebar harus sama, road belum dibake, live updates aktif, dan berada pada scene yang sama. Section material lokal tetap dipertahankan: section B dipetakan ke spline baru, dengan material, rentang Distance/Knots, serta status aktifnya tetap tersimpan. Rentang Distance tetap memakai meter dari awal spline. Undo/Redo dan penyimpanan scene mempertahankan sambungan.
+
+Junction linked otomatis memotong overlap permukaan dan collider, membuka props/fence di akses cabang, serta memakai material tanpa markah di area tengah. Clearance mempertimbangkan ukuran prefab dan offset props. Pemotongan mengikuti baris mesh jalan, termasuk Local Materials; area tanpa markah mencakup overlap cabang dan dibatasi pada siklus UV texture. Celah otomatis mengikuti perubahan knot dan tidak mengubah celah manual. Material junction dapat diganti pada **Road Junction Settings > Surface Material**. Gunakan material tanpa markah yang sesuai dengan texture jalan; texture khusus dengan fase markah berbeda perlu diperiksa secara visual.
+
+Untuk road yang sudah digabung sebelumnya, tekan **Connections > Refresh Junction Cleanup**, lalu simpan scene. Cleanup ini ditujukan untuk junction sebidang yang memiliki link knot dalam satu container; persilangan tanpa link dan junction jalan bertingkat belum ditangani. Untuk menyatukan dua spline terbuka menjadi satu jalur dari endpoint, gunakan **Merge Splines (Endpoints)** dan tombol **Merge Roads**.
+
+### Hapus sambungan
+
+Di **Connections**, pilih spline pada daftar **Remove Connection**, kemudian tekan **Remove Connection — Hapus Sambungan**. Penghubung Join Knots dihapus; cabang sumber tetap menjadi spline terpisah dalam container gabungan. Local Materials, filter spline props, dan celah manual dipetakan ulang. Section penghubung dihapus; layer yang khusus menargetkan penghubung dinonaktifkan. Undo/Redo mengembalikan perubahan ini.
+
+Penghubung baru ditandai otomatis dan tetap dikenali setelah scene dibuka ulang atau knot ditambahkan. Penghubung lama tanpa penanda dapat muncul sebagai **Legacy linked path (verify)**: periksa spline yang dipilih karena jalur asli dengan dua knot dan link di kedua ujung juga dapat memenuhi kriteria tersebut. Tidak ada spline yang dihapus otomatis.
+
+Untuk knot yang berimpit, gunakan **Unlink Selected Knot** lalu geser cabang bila perlu. Remove Connection tidak mengembalikan pembagian GameObject sebelum penggabungan. Mode lama **Merge Splines (Endpoints)** yang menyatukan knot dalam satu spline hanya dapat dibatalkan melalui Undo selama riwayatnya masih tersedia. Road yang sudah baked perlu kembali editable sebelum diubah.
+
 ## Menghubungkan terrain
 
 1. Buka tab **Terrain**, pilih terrain, lalu gunakan setup terrain manager.
@@ -71,6 +92,8 @@ Celah disimpan sebagai jarak dari awal spline, bukan sebagai ikatan ke knot. Jal
 ## Menggunakan demo
 
 Pada tab **Test Scene**, tekan **Import Demo Sample**. Unity menempatkan demo di `Assets/Samples/Road Tools/<version>/Demo` agar Package Manager dapat melacak impor. Tombol memilih folder demo; buka `Scenes/Road Tools Demo.unity` di dalamnya saat siap. Impor demo tidak mengganti scene yang sedang dibuka.
+
+Folder saja belum berarti sample sudah lengkap. Tekan tombol impor lagi untuk memperbaiki impor parsial: file yang hilang ditambahkan dan file yang sudah ada dipertahankan. Demo menyediakan `Materials`, `Textures`, `Prefabs`, `Profiles`, `Terrain`, serta `Props/Road Fence` untuk model FBX dan asetnya. Konflik metadata/GUID perlu diselesaikan melalui Unity sebelum mencoba lagi; importer tidak menimpa aset yang bertentangan.
 
 Jika demo sudah pernah diimpor atau dipindahkan, Road Tools memilih aset yang sudah ada. Gunakan pilihan **New Scene** atau **Current Scene** untuk membuat setup uji melalui tools.
 

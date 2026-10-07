@@ -16,6 +16,7 @@ namespace Dyma.SplineLevelToolkit
         public int LastSelfOverlapReductionCount { get; private set; }
         public int LastGeneratedMeshCount { get; private set; }
         public int LastGeneratedVertexCount { get; private set; }
+        internal RoadJunctionLayout LastJunctionLayout { get; private set; }
 
         public void Rebuild(SplineContainer spline, RoadProfile profile, Material materialOverride = null,
             RoadMaterialSections materialSections = null)
@@ -29,6 +30,8 @@ namespace Dyma.SplineLevelToolkit
 
             var root = new GameObject(GeneratedRootName);
             root.transform.SetParent(transform, false);
+            RoadJunctionLayout junctions = LastJunctionLayout = RoadJunctionLayout.Build(spline, profile);
+            Material junctionMaterial = GetComponent<RoadJunctionSettings>()?.SurfaceMaterial;
             for (int splineIndex = 0; splineIndex < spline.Splines.Count; splineIndex++)
             {
                 if (spline.Splines[splineIndex] == null || spline.Splines[splineIndex].Count < 2)
@@ -71,12 +74,14 @@ namespace Dyma.SplineLevelToolkit
                         materialOverride != null ? materialOverride : profile.Material,
                         materialSections,
                         materialSpans,
+                        junctions,
+                        junctionMaterial,
                         start,
                         end,
                         splineIndex,
                         chunkIndex));
                 }
-                StitchChunkNormals(chunkFilters);
+                if (junctions.Roads.Count == 0) StitchChunkNormals(chunkFilters);
             }
         }
 
@@ -119,6 +124,8 @@ namespace Dyma.SplineLevelToolkit
             Material material,
             RoadMaterialSections materialSections,
             IReadOnlyList<RoadMaterialSpan> materialSpans,
+            RoadJunctionLayout junctions,
+            Material junctionMaterial,
             float start,
             float end,
             int splineIndex,
@@ -240,6 +247,8 @@ namespace Dyma.SplineLevelToolkit
                 materialSlots = RoadMaterialMeshBuilder.ApplyTriangles(mesh, triangles, rowDistances, materialSpans);
             else mesh.SetTriangles(triangles, 0);
             mesh.RecalculateNormals();
+            materialSlots = RoadJunctionMeshClipper.Apply(mesh, transform, splineIndex, junctions,
+                materialSlots, junctionMaterial != null);
             mesh.RecalculateBounds();
             mesh.RecalculateTangents();
 
@@ -251,7 +260,7 @@ namespace Dyma.SplineLevelToolkit
             if (materialSlots != null)
             {
                 RoadMaterialChunk binding = chunk.AddComponent<RoadMaterialChunk>();
-                binding.Initialize(materialSlots);
+                binding.Initialize(materialSlots, junctionMaterial);
                 binding.Apply(material, materialSections);
             }
             LastGeneratedMeshCount++;

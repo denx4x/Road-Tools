@@ -34,7 +34,8 @@ namespace Dyma.SplineLevelToolkit
             int caps = triangles.Length - 12;
             int first = SlotAt((distances[0] + distances[1]) * 0.5f, spans, slots, indices);
             int last = SlotAt((distances[distances.Count-2] + distances[distances.Count-1]) * 0.5f, spans, slots, indices);
-            for (int i = 0; i < 6; i++) { indices[first].Add(triangles[caps+i]); indices[last].Add(triangles[caps+6+i]); }
+            for (int i = 0; i < 6; i++) indices[first].Add(triangles[caps+i]);
+            for (int i = 0; i < 6; i++) indices[last].Add(triangles[caps+6+i]);
             mesh.subMeshCount = slots.Count;
             for (int i = 0; i < slots.Count; i++) mesh.SetTriangles(indices[i], i);
             return slots.ToArray();
